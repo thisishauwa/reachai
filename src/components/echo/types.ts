@@ -15,6 +15,9 @@ export interface EchoEncounterState {
   encounterDependsOn: string[];
   privacyMode: PrivacyMode | null;
   patientId: string | null;
+  patientName?: string | null;
+  patientCreatedAt?: string | null;
+  locale?: "en" | "ha";
   sessionCode: string | null;
   consentId: string | null;
   syndromeId: string | null;

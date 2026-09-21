@@ -33,7 +33,11 @@ self.addEventListener("fetch", (event) => {
       const network = fetch(request)
         .then((response) => {
           if (response.ok) {
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, response.clone()));
+            const copy = response.clone();
+            caches
+              .open(CACHE_NAME)
+              .then((cache) => cache.put(request, copy))
+              .catch(() => {});
           }
           return response;
         })

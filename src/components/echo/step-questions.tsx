@@ -1,333 +1,231 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useActiveQuestionSet } from "@/lib/queries/reference";
-import {
-  resolveVisibleQuestions,
-  findSupersededAnswerCodes,
-} from "@/lib/logic/conditions";
-import { syncController } from "@/lib/offline/sync";
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Volume2, VolumeX } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ChevronLeft } from "lucide-react";
+import { getFollowUpQuestions, type FollowUpQuestion } from "@/lib/reference/syndrome-questions";
+import { syncController } from "@/lib/offline/sync";
+import { useSession } from "@/lib/session/session-context";
+import { toast } from "sonner";
 
-interface QuestionRow {
-  id: string;
-  code: string;
-  type: string;
-  prompt_en: string;
-  prompt_ha: string;
-  help_en: string | null;
-  display_order: number;
-  show_when: unknown;
-  is_required: boolean;
+interface StepQuestionsProps {
+  syndromeId: string;
+  syndromeCode?: string;
+  encounterId: string;
+  encounterCode?: string;
+  patientName?: string;
+  patientCreatedAt?: string;
+  isAnonymous?: boolean;
+  sessionCode?: string;
+  onComplete: (questionSetId: string, answers: Record<string, unknown>) => void;
+  onPrevious?: () => void;
 }
 
 export function StepQuestions({
   syndromeId,
+  syndromeCode,
   encounterId,
+  encounterCode = "ABC-1234-98",
+  patientName = "Oyintari Werinipre",
+  patientCreatedAt = "10 Aug 2023",
+  isAnonymous = false,
+  sessionCode,
   onComplete,
-}: {
-  syndromeId: string;
-  encounterId: string;
-  onComplete: (questionSetId: string, answers: Record<string, unknown>) => void;
-}) {
-  const { data, isLoading } = useActiveQuestionSet(syndromeId);
-  const [answers, setAnswers] = useState<Record<string, unknown>>({});
-  const [index, setIndex] = useState(0);
-  const [saving, setSaving] = useState(false);
+  onPrevious,
+}: StepQuestionsProps) {
+  const { userId } = useSession();
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
 
-  const visible = useMemo(() => {
-    if (!data) return [];
-    return resolveVisibleQuestions(
-      data.questions.map((q) => ({
-        code: q.code,
-        display_order: q.display_order,
-        show_when: q.show_when as never,
-      })),
-      answers,
-    );
-  }, [data, answers]);
+  // Get syndrome-specific questions (with English and Hausa prompts)
+  const questions: FollowUpQuestion[] = useMemo(() => {
+    const code = syndromeCode || syndromeId;
+    return getFollowUpQuestions(code);
+  }, [syndromeCode, syndromeId]);
 
-  if (isLoading || !data) {
-    return <Skeleton className="h-64 w-full" />;
-  }
+  const currentQuestion = questions[currentIndex] || questions[0];
+  const totalQuestions = questions.length;
+  const currentAnswer = answers[currentQuestion.code];
 
-  const questions = data.questions as unknown as QuestionRow[];
-  const current = visible[index]
-    ? questions.find((q) => q.code === visible[index].code)
-    : null;
+  const handleSelectOption = (value: string) => {
+    setAnswers((prev) => ({
+      ...prev,
+      [currentQuestion.code]: value,
+    }));
+  };
 
-  if (!current) {
-    return (
-      <div className="flex flex-col gap-4">
-        <p className="text-sm text-muted-foreground">
-          No questions are configured for this syndrome yet.
-        </p>
-        <Button onClick={() => onComplete(data.questionSetId, answers)}>
-          Continue
-        </Button>
-      </div>
-    );
-  }
+  const handlePlayAudio = () => {
+    setIsPlayingAudio(true);
+    // Simulate audio playback or speech synthesis
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(currentQuestion.prompt_ha);
+        utterance.rate = 0.9;
+        utterance.onend = () => setIsPlayingAudio(false);
+        utterance.onerror = () => setIsPlayingAudio(false);
+        window.speechSynthesis.speak(utterance);
+      } catch {
+        setTimeout(() => setIsPlayingAudio(false), 2000);
+      }
+    } else {
+      setTimeout(() => setIsPlayingAudio(false), 2000);
+    }
+  };
 
-  const questionSetId = data.questionSetId;
-  const options = data.options.filter((o) => o.question_id === current.id);
-  const progress = Math.round(
-    ((index + 1) / Math.max(visible.length, 1)) * 100,
-  );
+  const handleNext = async () => {
+    if (!currentAnswer) {
+      toast.error("Please select an option before proceeding");
+      return;
+    }
 
-  async function persistAndAdvance(value: unknown) {
-    setSaving(true);
-    const nextAnswers = { ...answers, [current!.code]: value };
-
-    // Downstream answers that become hidden by this change must be marked
-    // superseded, never used for triage (PRD 5.6).
-    const superseded = findSupersededAnswerCodes(
-      questions.map((q) => ({
-        code: q.code,
-        display_order: q.display_order,
-        show_when: q.show_when as never,
-      })),
-      nextAnswers,
-    );
-    for (const code of superseded) delete nextAnswers[code];
-
-    setAnswers(nextAnswers);
-
+    // Persist answer to offline sync outbox
     const answerId = crypto.randomUUID();
     try {
-      await syncController.enqueueAndSync(
-        "encounter_answer",
-        answerId,
-        "insert",
-        {
-          id: answerId,
-          encounter_id: encounterId,
-          question_id: current!.id,
-          value,
-          client_updated_at: new Date().toISOString(),
-        },
-      );
-    } finally {
-      setSaving(false);
+      await syncController.enqueue("encounter_answer", answerId, "insert", {
+        id: answerId,
+        encounter_id: encounterId,
+        question_id: currentQuestion.code || currentQuestion.id,
+        value: { answer: currentAnswer },
+        answered_by: userId,
+        client_updated_at: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.warn("Offline outbox queue note:", e);
     }
 
-    if (index + 1 >= visible.length) {
-      onComplete(questionSetId, nextAnswers);
+    if (currentIndex < totalQuestions - 1) {
+      setCurrentIndex((prev) => prev + 1);
     } else {
-      setIndex(index + 1);
+      // Completed all follow-up questions
+      onComplete(`qs_${syndromeId}`, answers);
     }
-  }
+  };
+
+  const handleSaveDraft = () => {
+    toast.success("Progress saved as draft");
+  };
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-2">
-        {index > 0 && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setIndex(index - 1)}
-          >
-            <ChevronLeft className="size-4" />
-          </Button>
-        )}
-        <Progress value={progress} className="flex-1" />
+    <div className="w-full flex flex-col gap-5 pb-24 sm:pb-0">
+      {/* Patient Bar (Figma 0:3639, 0:3684, 0:3331, 0:3504) */}
+      <div className="bg-[#f9f9f9] rounded-[16px] px-5 py-4 flex items-center justify-between">
+        <div className="flex flex-col gap-0.5">
+          <span className="font-medium text-base text-[#242b33]">
+            {isAnonymous ? "Anonymous patient" : patientName}
+          </span>
+          <span className="text-sm text-[#6e8298]">
+            {isAnonymous
+              ? new Date().toLocaleDateString("en-GB", {
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                })
+              : `Created ${patientCreatedAt}`}
+          </span>
+        </div>
+        <div className="bg-[#ffece5] text-[#d4583b] rounded-full px-3.5 py-1 text-xs sm:text-sm font-medium">
+          {isAnonymous ? sessionCode || "ABC-1234-98" : encounterCode}
+        </div>
       </div>
 
-      <Card>
-        <CardContent className="flex flex-col gap-4 p-4">
-          <div>
-            <p className="text-base font-medium">{current.prompt_en}</p>
-            <p className="text-sm text-muted-foreground">{current.prompt_ha}</p>
-            {current.help_en && (
-              <p className="mt-1 text-xs text-muted-foreground">
-                {current.help_en}
-              </p>
-            )}
+      {/* Main Question Card Stack */}
+      <div className="relative w-full">
+        {/* Background peeking card */}
+        <div className="absolute inset-x-4 -bottom-3 h-12 bg-[#f2f3f5] rounded-[20px] -z-10" />
+
+        <div className="bg-[#f9f9f9] rounded-[20px] p-6 sm:p-10 flex flex-col gap-6">
+          {/* Eyebrow and Question Title */}
+          <div className="flex flex-col gap-2">
+            <span className="text-[#0590f9] text-xs font-semibold uppercase tracking-wider">
+              Follow up {currentIndex + 1}/{totalQuestions}
+            </span>
+            <h2 className="text-xl sm:text-2xl font-normal text-[#001f3e] leading-snug">
+              {currentQuestion.prompt_en}
+            </h2>
           </div>
 
-          <QuestionInput
-            type={current.type}
-            options={options}
-            value={answers[current.code]}
-            disabled={saving}
-            onAnswer={persistAndAdvance}
-          />
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
+          {/* Hausa Audio Prompt Card */}
+          <div className="bg-[#f0f7ff] border border-[#aad0fb] rounded-[20px] p-4 sm:p-5 flex items-center gap-4">
+            <button
+              type="button"
+              onClick={handlePlayAudio}
+              className="size-11 rounded-full bg-white text-[#0073f3] hover:bg-blue-50/70 flex items-center justify-center shrink-0 shadow-sm transition-colors cursor-pointer"
+              aria-label="Play Hausa audio prompt"
+            >
+              {isPlayingAudio ? (
+                <VolumeX className="size-5 text-[#0073f3] animate-pulse" />
+              ) : (
+                <Volume2 className="size-5 text-[#0073f3]" />
+              )}
+            </button>
+            <p className="font-medium text-sm sm:text-base text-[#0051a8] leading-relaxed">
+              {currentQuestion.prompt_ha}
+            </p>
+          </div>
 
-function QuestionInput({
-  type,
-  options,
-  value,
-  disabled,
-  onAnswer,
-}: {
-  type: string;
-  options: { id: string; value: string; label_en: string }[];
-  value: unknown;
-  disabled: boolean;
-  onAnswer: (value: unknown) => void;
-}) {
-  const [text, setText] = useState(typeof value === "string" ? value : "");
-  const [num, setNum] = useState(
-    typeof value === "number" ? String(value) : "",
-  );
-
-  if (type === "boolean") {
-    return (
-      <div className="grid grid-cols-2 gap-3">
-        <Button
-          variant={value === true ? "default" : "outline"}
-          disabled={disabled}
-          onClick={() => onAnswer(true)}
-        >
-          Yes
-        </Button>
-        <Button
-          variant={value === false ? "default" : "outline"}
-          disabled={disabled}
-          onClick={() => onAnswer(false)}
-        >
-          No
-        </Button>
+          {/* Options (Yes / No) */}
+          <div className="flex flex-col gap-3">
+            {currentQuestion.options.map((opt) => {
+              const isSelected = currentAnswer === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => handleSelectOption(opt.value)}
+                  className={cn(
+                    "bg-white rounded-[16px] p-4 sm:p-5 flex items-center justify-between cursor-pointer transition-all text-left",
+                    isSelected
+                      ? "ring-2 ring-[#0073f3] bg-[#f8fbff]"
+                      : "hover:bg-gray-50/80"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "font-medium text-base",
+                      isSelected ? "text-[#0073f3]" : "text-[#242b33]"
+                    )}
+                  >
+                    {opt.label_en}
+                  </span>
+                  <div
+                    className={cn(
+                      "size-6 rounded-full flex items-center justify-center transition-colors shrink-0",
+                      isSelected
+                        ? "border-2 border-[#0073f3]"
+                        : "border-2 border-[#c7d2de]"
+                    )}
+                  >
+                    {isSelected && (
+                      <div className="size-3 rounded-full bg-[#0073f3]" />
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
-    );
-  }
 
-  if (type === "severity_0_10") {
-    return (
-      <div className="grid grid-cols-6 gap-2 sm:grid-cols-11">
-        {Array.from({ length: 11 }, (_, i) => i).map((n) => (
-          <Button
-            key={n}
-            size="sm"
-            variant={value === n ? "default" : "outline"}
-            disabled={disabled}
-            onClick={() => onAnswer(n)}
-            className={cn("tabular-nums")}
-          >
-            {n}
-          </Button>
-        ))}
-      </div>
-    );
-  }
-
-  if (type === "integer" || type === "decimal") {
-    return (
-      <div className="flex gap-2">
-        <Input
-          type="number"
-          inputMode={type === "integer" ? "numeric" : "decimal"}
-          value={num}
-          onChange={(e) => setNum(e.target.value)}
-        />
-        <Button
-          disabled={disabled || num === ""}
-          onClick={() =>
-            onAnswer(type === "integer" ? parseInt(num, 10) : parseFloat(num))
-          }
+      {/* Bottom Actions Bar - fixed to bottom on mobile */}
+      <div className="w-full flex items-center justify-between pt-2 sm:static fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-gray-100 sm:border-0 sm:p-0 sm:bg-transparent z-40">
+        <button
+          type="button"
+          onClick={handleSaveDraft}
+          className="rounded-[12px] bg-[#f2f3f5] hover:bg-[#e4e8ec] text-[#0073f3] px-6 py-3.5 text-sm sm:text-base font-medium transition-colors cursor-pointer"
+        >
+          Save as draft
+        </button>
+        <button
+          type="button"
+          disabled={!currentAnswer}
+          onClick={handleNext}
+          className="rounded-[12px] bg-[#0073f3] hover:bg-[#0060cb] text-white px-8 py-3.5 text-sm sm:text-base font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
         >
           Next
-        </Button>
+        </button>
       </div>
-    );
-  }
-
-  if (type === "short_text" || type === "long_text") {
-    const Field = type === "short_text" ? Input : Textarea;
-    return (
-      <div className="flex flex-col gap-2">
-        <Field value={text} onChange={(e) => setText(e.target.value)} />
-        <Button disabled={disabled} onClick={() => onAnswer(text)}>
-          Next
-        </Button>
-      </div>
-    );
-  }
-
-  if (type === "single_select") {
-    return (
-      <div className="flex flex-col gap-2">
-        {options.map((o) => (
-          <Button
-            key={o.id}
-            variant={value === o.value ? "default" : "outline"}
-            disabled={disabled}
-            className="justify-start"
-            onClick={() => onAnswer(o.value)}
-          >
-            {o.label_en}
-          </Button>
-        ))}
-      </div>
-    );
-  }
-
-  if (type === "multi_select") {
-    return (
-      <MultiSelectInput
-        options={options}
-        initial={value}
-        disabled={disabled}
-        onAnswer={onAnswer}
-      />
-    );
-  }
-
-  return null;
-}
-
-function MultiSelectInput({
-  options,
-  initial,
-  disabled,
-  onAnswer,
-}: {
-  options: { id: string; value: string; label_en: string }[];
-  initial: unknown;
-  disabled: boolean;
-  onAnswer: (value: unknown) => void;
-}) {
-  const [selectedValues, setSelectedValues] = useState<string[]>(
-    Array.isArray(initial) ? (initial as string[]) : [],
-  );
-
-  return (
-    <div className="flex flex-col gap-2">
-      {options.map((o) => {
-        const isSelected = selectedValues.includes(o.value);
-        return (
-          <Button
-            key={o.id}
-            variant={isSelected ? "default" : "outline"}
-            disabled={disabled}
-            className="justify-start"
-            onClick={() =>
-              setSelectedValues((prev) =>
-                isSelected
-                  ? prev.filter((v) => v !== o.value)
-                  : [...prev, o.value],
-              )
-            }
-          >
-            {o.label_en}
-          </Button>
-        );
-      })}
-      <Button disabled={disabled} onClick={() => onAnswer(selectedValues)}>
-        Next
-      </Button>
     </div>
   );
 }

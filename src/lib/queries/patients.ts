@@ -20,14 +20,14 @@ export function useRecentPatients(facilityId: string, limit = 2) {
   });
 }
 
-export function usePatients(facilityId: string, search: string) {
+export function usePatients(facilityId: string, search = "") {
   return useQuery({
     queryKey: ["patients", "list", facilityId, search],
     queryFn: async () => {
       const supabase = createClient();
       let query = supabase
         .from("patients")
-        .select("id, full_name, patient_code, age_band, sex, created_at")
+        .select("id, full_name, patient_code, age_band, sex, phone_e164, occupation_type, pregnancy_status, created_at")
         .eq("facility_id", facilityId)
         .order("created_at", { ascending: false })
         .limit(50);

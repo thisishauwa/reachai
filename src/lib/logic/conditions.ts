@@ -75,15 +75,40 @@ export function evaluateCondition(clause: Condition, inputs: AnswerMap): boolean
   }
 }
 
+/**
+ * Normalizes raw condition values coming from JSONB columns (which may be
+ * null, undefined, empty objects '{}', a single Condition object, or an array).
+ */
+export function normalizeConditions(raw: unknown): Condition[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw as Condition[];
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      return normalizeConditions(parsed);
+    } catch {
+      return [];
+    }
+  }
+  if (typeof raw === "object") {
+    if ("question_code" in raw && typeof (raw as Record<string, unknown>).question_code === "string") {
+      return [raw as Condition];
+    }
+    return [];
+  }
+  return [];
+}
+
 /** All clauses in the array are combined with AND, matching the SQL function. */
 export function evaluateConditions(
-  conditions: Condition[] | null | undefined,
+  conditions: Condition[] | unknown,
   inputs: AnswerMap
 ): boolean {
-  if (!conditions || conditions.length === 0) {
+  const clauses = normalizeConditions(conditions);
+  if (clauses.length === 0) {
     return false;
   }
-  return conditions.every((clause) => evaluateCondition(clause, inputs));
+  return clauses.every((clause) => evaluateCondition(clause, inputs));
 }
 
 /**
@@ -92,13 +117,14 @@ export function evaluateConditions(
  * an empty array (a rule with no conditions should never fire).
  */
 export function shouldShowQuestion(
-  showWhen: Condition[] | null | undefined,
+  showWhen: Condition[] | unknown,
   inputs: AnswerMap
 ): boolean {
-  if (!showWhen || showWhen.length === 0) {
+  const clauses = normalizeConditions(showWhen);
+  if (clauses.length === 0) {
     return true;
   }
-  return showWhen.every((clause) => evaluateCondition(clause, inputs));
+  return clauses.every((clause) => evaluateCondition(clause, inputs));
 }
 
 /**
@@ -110,7 +136,7 @@ export function shouldShowQuestion(
 export interface QuestionLike {
   code: string;
   display_order: number;
-  show_when?: Condition[] | null;
+  show_when?: Condition[] | unknown;
 }
 
 export function resolveVisibleQuestions<T extends QuestionLike>(

@@ -153,6 +153,9 @@ export interface Database {
           pregnancy_status?: string | null;
           occupation_type: string;
           created_by: string;
+          created_at?: string;
+          updated_at?: string;
+          archived_at?: string | null;
         }
       >;
       encounters: Table<
@@ -771,6 +774,13 @@ export interface Database {
         };
         Returns: Database["public"]["Tables"]["referrals"]["Row"];
       };
+      acknowledge_triage: {
+        Args: {
+          p_triage_outcome_id: string;
+          p_override_reason?: string | null;
+        };
+        Returns: Database["public"]["Tables"]["triage_outcomes"]["Row"];
+      };
     };
     Enums: {
       app_role: AppRole;
@@ -787,3 +797,5 @@ export interface Database {
     };
   };
 }
+
+export type TriageOutcomeRow = Database["public"]["Tables"]["triage_outcomes"]["Row"];

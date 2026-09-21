@@ -12,6 +12,7 @@ import { useSession } from "@/lib/session/session-context";
 import { usePatients } from "@/lib/queries/patients";
 import { useActiveConsentText } from "@/lib/queries/reference";
 import { syncController } from "@/lib/offline/sync";
+import { generatePatientCode } from "@/lib/reference/codes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -88,7 +89,7 @@ export function StepIdentifiedSetup({
   } = useForm<PatientFormValues>({
     resolver: zodResolver(patientFormSchema),
     defaultValues: {
-      patient_code: `PT-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+      patient_code: generatePatientCode(),
     },
   });
   const sex = watch("sex");

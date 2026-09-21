@@ -1,32 +1,16 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell } from "lucide-react";
-import { useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { useEffect, useRef, useState } from "react";
+import { Bell, X, Check, Send } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { formatDistanceToNow } from "date-fns";
-
-const NOTIFICATION_COPY: Record<string, string> = {
-  referral_created: "A new referral was created for your facility",
-  referral_arrived: "A referral was marked arrived",
-  referral_closed: "A referral was closed",
-  referral_cancelled: "A referral was cancelled",
-  sync_attention: "A device has pending changes that need attention",
-};
+import { format } from "date-fns";
 
 export function NotificationBell({ userId }: { userId: string }) {
   const queryClient = useQueryClient();
   const supabase = createClient();
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const { data: notifications = [] } = useQuery({
     queryKey: ["notifications", userId],
@@ -40,6 +24,23 @@ export function NotificationBell({ userId }: { userId: string }) {
       return data;
     },
   });
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setOpen(false);
+      }
+    }
+    if (open) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [open]);
 
   useEffect(() => {
     const channel = supabase
@@ -61,8 +62,7 @@ export function NotificationBell({ userId }: { userId: string }) {
     return () => {
       void supabase.removeChannel(channel);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]);
+  }, [userId, supabase, queryClient]);
 
   const unreadCount = notifications.filter((n) => !n.read_at).length;
 
@@ -79,59 +79,119 @@ export function NotificationBell({ userId }: { userId: string }) {
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="icon"
-            className="relative"
-            aria-label="Notifications"
-          >
-            <Bell className="size-5" />
-            {unreadCount > 0 && (
-              <Badge className="absolute -right-1 -top-1 h-5 min-w-5 justify-center rounded-full px-1 text-[10px]">
-                {unreadCount}
-              </Badge>
-            )}
-          </Button>
-        }
-      />
-      <DropdownMenuContent align="end" className="w-80">
-        <DropdownMenuLabel className="flex items-center justify-between">
-          Notifications
-          {unreadCount > 0 && (
-            <button
-              className="text-xs font-normal text-primary"
-              onClick={() => markRead()}
-            >
-              Mark all as read
-            </button>
-          )}
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {notifications.length === 0 && (
-          <div className="px-2 py-4 text-center text-sm text-muted-foreground">
-            No notifications yet
-          </div>
+    <div ref={containerRef} className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-label="Notifications"
+        className="relative size-11 rounded-full bg-[#f2f3f5] hover:bg-[#e4e8ec] flex items-center justify-center transition-colors cursor-pointer outline-none"
+      >
+        <Bell className="size-5 text-[#242b33]" />
+        {unreadCount > 0 && (
+          <span className="absolute top-2.5 right-2.5 size-2 rounded-full bg-[#ef4444] ring-2 ring-white" />
         )}
-        {notifications.map((n) => (
-          <DropdownMenuItem
-            key={n.id}
-            className="flex flex-col items-start gap-0.5"
-            onClick={() => markRead(n.id)}
-          >
-            <span
-              className={n.read_at ? "text-muted-foreground" : "font-medium"}
-            >
-              {NOTIFICATION_COPY[n.type] ?? n.type}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              {formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}
-            </span>
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </button>
+
+      {open && (
+        <div
+          role="dialog"
+          aria-label="Notifications"
+          className="absolute right-0 mt-2 z-50 w-[340px] sm:w-[380px] p-5 rounded-[12px] bg-white shadow-2xl border border-[#e4e8ec] animate-in fade-in-50 zoom-in-95 duration-150"
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between pb-3 border-b border-[#f2f3f5]">
+            <h2 className="text-lg font-semibold text-[#001f3e] tracking-tight">
+              Notifications
+            </h2>
+            <div className="flex items-center gap-3">
+              {unreadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => markRead()}
+                  className="text-xs font-medium text-[#0073F3] hover:underline cursor-pointer"
+                >
+                  Mark as read
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                aria-label="Close notifications"
+                className="text-[#6e8298] hover:text-[#242b33] transition-colors cursor-pointer"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* List */}
+          <div className="mt-3 flex flex-col gap-3 max-h-[360px] overflow-y-auto pr-0.5">
+            {notifications.length === 0 ? (
+              <div className="py-8 text-center text-sm text-[#6e8298]">
+                No notifications yet
+              </div>
+            ) : (
+              notifications.map((n) => {
+                const isArrival = n.type === "referral_arrived";
+                const isClosed = n.type === "referral_closed";
+                const referralCode =
+                  (n.payload as { referral_code?: string } | null)
+                    ?.referral_code ?? "Referral";
+
+                return (
+                  <div
+                    key={n.id}
+                    onClick={() => markRead(n.id)}
+                    className={`flex items-start gap-3 p-2.5 rounded-[8px] transition-colors cursor-pointer ${
+                      n.read_at ? "opacity-75" : "bg-[#f8fafc]"
+                    }`}
+                  >
+                    {/* Icon badge */}
+                    <div
+                      className={`size-10 rounded-[8px] flex items-center justify-center shrink-0 ${
+                        isClosed
+                          ? "bg-[#e8f8ee] text-[#16a34a]"
+                          : "bg-[#e5f1ff] text-[#0073f3]"
+                      }`}
+                    >
+                      {isClosed ? (
+                        <Check className="size-5 stroke-[2.2]" />
+                      ) : (
+                        <Send className="size-4 stroke-[2]" />
+                      )}
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-[#242b33] leading-snug">
+                        Referral{" "}
+                        <span className="font-mono font-medium">
+                          {referralCode}
+                        </span>{" "}
+                        has{" "}
+                        {isArrival && <strong>arrived at REACH</strong>}
+                        {isClosed && <strong>been closed</strong>}
+                        {!isArrival && !isClosed && (
+                          <span>
+                            updated (
+                            <strong>
+                              {n.type.replace("referral_", "")}
+                            </strong>
+                            )
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-[#6e8298] mt-1">
+                        {format(new Date(n.created_at), "MMM d'th at' HH:mm")}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

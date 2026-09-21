@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/card";
 import type { SessionData } from "@/lib/session/types";
 
+import { AppShell } from "@/components/layout/app-shell";
+
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const supabase = await createClient();
   const { data: userData, error: userError } = await supabase.auth.getUser();
@@ -31,7 +33,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   const { data: memberships } = await supabase
     .from("facility_memberships")
     .select(
-      "facility_id, organization_id, role, is_active, facilities(name, code)",
+      "facility_id, organization_id, role, is_active, facilities!facility_memberships_facility_id_fkey(name, code)",
     )
     .eq("user_id", userData.user.id)
     .eq("is_active", true);
@@ -78,11 +80,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
     <SessionProvider session={session}>
       <ServiceWorkerRegistration />
       <OfflineBootstrap />
-      <Header />
-      <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 p-4 pb-6">
-        {children}
-      </main>
-      <BottomNav />
+      <AppShell>{children}</AppShell>
     </SessionProvider>
   );
 }

@@ -8,6 +8,7 @@ import { patientFormSchema, type PatientFormValues } from "@/lib/validation/pati
 import { useSession } from "@/lib/session/session-context";
 import { usePatients } from "@/lib/queries/patients";
 import { syncController } from "@/lib/offline/sync";
+import { generatePatientCode } from "@/lib/reference/codes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -27,7 +28,7 @@ export function StepPatient({
 
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<PatientFormValues>({
     resolver: zodResolver(patientFormSchema),
-    defaultValues: { patient_code: `PT-${Math.random().toString(36).slice(2, 6).toUpperCase()}` },
+    defaultValues: { patient_code: generatePatientCode() },
   });
   const sex = watch("sex");
   const ageBand = watch("age_band");

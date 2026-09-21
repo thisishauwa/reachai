@@ -15,3 +15,8 @@ export function generateEncounterCode(): string {
 export function generateSessionCode(): string {
   return `AN-${randomBase32(6)}`;
 }
+
+/** Standard patient code — PAT-XXXXXX (6 base-32 chars). Used by all patient creation paths. */
+export function generatePatientCode(): string {
+  return `PAT-${randomBase32(6)}`;
+}

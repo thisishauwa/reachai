@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "create-testers": "node scripts/create-testers.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

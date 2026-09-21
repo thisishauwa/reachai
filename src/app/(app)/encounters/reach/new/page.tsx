@@ -1,11 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSession } from "@/lib/session/session-context";
+import { createClient } from "@/lib/supabase/client";
 import { syncController } from "@/lib/offline/sync";
 import { generateEncounterCode } from "@/lib/reference/codes";
+import { usePatient } from "@/lib/queries/patients";
+import { EncounterHeader } from "@/components/echo/encounter-header";
 import { StepPatient } from "@/components/reach/step-patient";
 import { StepHistory } from "@/components/reach/step-history";
 import { StepExamination } from "@/components/reach/step-examination";
@@ -15,13 +19,18 @@ import { INITIAL_REACH_STATE, type ReachEncounterState, type ReachStep } from "@
 
 export default function NewReachEncounterPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
   const { activeFacility, userId } = useSession();
   const [state, setState] = useState<ReachEncounterState>(INITIAL_REACH_STATE);
   const [encounterCode] = useState(() => generateEncounterCode());
 
+  const urlPatientId = searchParams.get("patientId");
+  const { data: preloadedPatient } = usePatient(urlPatientId || undefined);
+
   async function selectPatient(patientId: string, patientName: string) {
     const encounterId = crypto.randomUUID();
-    await syncController.enqueueAndSync("encounter", encounterId, "insert", {
+    const encounterPayload = {
       id: encounterId,
       organization_id: activeFacility.organizationId,
       facility_id: activeFacility.facilityId,
@@ -29,12 +38,23 @@ export default function NewReachEncounterPage() {
       patient_id: patientId,
       encounter_code: encounterCode,
       session_code: null,
-      workflow_mode: "reach",
-      privacy_mode: "identified",
-      status: "in_progress",
-    });
+      workflow_mode: "reach" as const,
+      privacy_mode: "identified" as const,
+      status: "in_progress" as const,
+    };
+
+    const supabase = createClient();
+    await supabase.from("encounters").upsert(encounterPayload, { onConflict: "id" });
+    await syncController.enqueueAndSync("encounter", encounterId, "insert", encounterPayload);
+
     setState((s) => ({ ...s, encounterId, patientId, patientName, step: "history" }));
   }
+
+  useEffect(() => {
+    if (preloadedPatient && !state.patientId) {
+      selectPatient(preloadedPatient.id, preloadedPatient.full_name);
+    }
+  }, [preloadedPatient, state.patientId]);
 
   async function submitAll() {
     if (!state.encounterId) return;
@@ -100,18 +120,61 @@ export default function NewReachEncounterPage() {
       }
     }
 
+    const completedAt = new Date().toISOString();
+    const supabase = createClient();
+
+    const encounterRecord = {
+      id: encounterId,
+      organization_id: activeFacility.organizationId,
+      facility_id: activeFacility.facilityId,
+      clinician_id: userId,
+      patient_id: state.patientId,
+      session_code: null,
+      encounter_code: encounterCode,
+      workflow_mode: "reach" as const,
+      privacy_mode: "identified" as const,
+      status: "completed" as const,
+      completed_at: completedAt,
+    };
+
+    // Save directly to Supabase encounters table
+    const { error: encError } = await supabase
+      .from("encounters")
+      .upsert(encounterRecord, { onConflict: "id" });
+
+    if (encError) {
+      console.error("Direct encounter upsert error:", encError);
+    }
+
+    await syncController.enqueueAndSync("encounter", encounterId, "insert", encounterRecord);
     await syncController.enqueueAndSync("encounter_status", encounterId, "update", {
       id: encounterId,
       status: "completed",
-      completed_at: new Date().toISOString(),
+      completed_at: completedAt,
     });
 
-    toast.success("Encounter completed");
+    await queryClient.invalidateQueries({ queryKey: ["encounters"] });
+    toast.success("Encounter completed and saved");
     router.push("/encounters");
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="w-full flex flex-col gap-2 pb-12">
+      <EncounterHeader
+        onBack={() => {
+          if (state.step === "history") {
+            setState((s) => ({ ...s, step: "patient" }));
+          } else if (state.step === "examination") {
+            setState((s) => ({ ...s, step: "history" }));
+          } else if (state.step === "assessment") {
+            setState((s) => ({ ...s, step: "examination" }));
+          } else if (state.step === "review") {
+            setState((s) => ({ ...s, step: "assessment" }));
+          } else {
+            router.back();
+          }
+        }}
+      />
       {state.step === "patient" && <StepPatient onSelect={selectPatient} />}
 
       {state.step === "history" && (

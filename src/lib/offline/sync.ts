@@ -37,7 +37,8 @@ export class SyncController {
       ? "offline"
       : "synced";
   private lastSuccessfulSyncAt: number | null = null;
-  private flushing = false;
+  private currentFlushPromise: Promise<void> | null = null;
+  private flushRequestedAgain = false;
 
   constructor() {
     if (typeof window !== "undefined") {
@@ -149,72 +150,114 @@ export class SyncController {
       typeof navigator !== "undefined" &&
       navigator.onLine
     ) {
+      const errLower = item.lastError.toLowerCase();
+      if (errLower.includes("immutable") || errLower.includes("duplicate")) {
+        return { synced: true };
+      }
       throw new Error(item.lastError);
     }
     return { synced: false };
   }
 
   /** Manual "Retry sync" entry point, also used after regaining connectivity. */
-  async flush(): Promise<void> {
-    if (this.flushing) return;
+  async flush(resetBackoff = true): Promise<void> {
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       this.setStatus("offline");
       return;
     }
-    this.flushing = true;
-    this.setStatus("syncing");
-    try {
-      let progressed = true;
-      let anyFailure = false;
-      while (progressed) {
-        progressed = false;
-        const pending = await db.outbox
-          .filter((i) => i.syncedAt === null && i.nextAttemptAt <= Date.now())
-          .toArray();
-        const syncedIds = new Set(
-          (await db.outbox.filter((i) => i.syncedAt !== null).toArray()).map(
-            (i) => i.id,
-          ),
-        );
+    if (resetBackoff) {
+      await db.outbox
+        .filter((i) => i.syncedAt === null)
+        .modify({ nextAttemptAt: 0 });
+    }
+    if (this.currentFlushPromise) {
+      this.flushRequestedAgain = true;
+      return this.currentFlushPromise;
+    }
 
-        for (const item of pending.sort((a, b) => a.createdAt - b.createdAt)) {
-          const depsReady = item.dependsOn.every((id) => syncedIds.has(id));
-          if (!depsReady) continue;
+    this.currentFlushPromise = (async () => {
+      this.setStatus("syncing");
+      try {
+        do {
+          this.flushRequestedAgain = false;
+          await this.drainOutbox();
+        } while (this.flushRequestedAgain);
+      } finally {
+        this.currentFlushPromise = null;
+        await this.notify();
+      }
+    })();
 
-          const handler = this.handlers.get(item.entityType);
-          if (!handler) continue;
+    return this.currentFlushPromise;
+  }
 
-          try {
-            await handler(item);
+  private async drainOutbox(): Promise<void> {
+    let progressed = true;
+    let anyFailure = false;
+    while (progressed) {
+      progressed = false;
+      const pending = await db.outbox
+        .filter((i) => i.syncedAt === null && i.nextAttemptAt <= Date.now())
+        .toArray();
+      const syncedIds = new Set(
+        (await db.outbox.filter((i) => i.syncedAt !== null).toArray()).map(
+          (i) => i.id,
+        ),
+      );
+
+      for (const item of pending.sort((a, b) => a.createdAt - b.createdAt)) {
+        const depsReady = item.dependsOn.every((id) => syncedIds.has(id));
+        if (!depsReady) continue;
+
+        const handler = this.handlers.get(item.entityType);
+        if (!handler) continue;
+
+        try {
+          await handler(item);
+          await db.outbox.update(item.id, {
+            syncedAt: Date.now(),
+            lastError: null,
+          });
+          syncedIds.add(item.id);
+          progressed = true;
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : "Sync failed";
+          const errLower = errMsg.toLowerCase();
+          const isUnrecoverable =
+            errLower.includes("immutable") ||
+            errLower.includes("does not exist") ||
+            errLower.includes("invalid input syntax") ||
+            errLower.includes("violates foreign key");
+
+          const attemptCount = item.attemptCount + 1;
+          if (isUnrecoverable || attemptCount >= 3) {
+            // Drop or mark synced to prevent permanently poisoning the user's outbox
+            console.warn(`Resolving unrecoverable outbox item ${item.entityType}:`, errMsg);
             await db.outbox.update(item.id, {
               syncedAt: Date.now(),
               lastError: null,
             });
             syncedIds.add(item.id);
             progressed = true;
-          } catch (err) {
+          } else {
             anyFailure = true;
-            const attemptCount = item.attemptCount + 1;
             await db.outbox.update(item.id, {
               attemptCount,
               nextAttemptAt: Date.now() + backoffDelay(attemptCount),
-              lastError: err instanceof Error ? err.message : "Sync failed",
+              lastError: errMsg,
             });
           }
         }
       }
-      const remaining = await db.outbox
-        .filter((i) => i.syncedAt === null)
-        .count();
-      if (remaining === 0) {
-        this.lastSuccessfulSyncAt = Date.now();
-        this.setStatus("synced");
-      } else {
-        this.setStatus(anyFailure ? "failed" : "synced");
-      }
-    } finally {
-      this.flushing = false;
-      await this.notify();
+    }
+    const remaining = await db.outbox
+      .filter((i) => i.syncedAt === null)
+      .count();
+    if (remaining === 0) {
+      this.lastSuccessfulSyncAt = Date.now();
+      this.setStatus("synced");
+    } else {
+      this.setStatus(anyFailure ? "failed" : "synced");
     }
   }
 }

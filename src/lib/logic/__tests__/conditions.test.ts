@@ -9,7 +9,9 @@ import {
 describe("shouldShowQuestion", () => {
   it("shows a question with no show_when by default", () => {
     expect(shouldShowQuestion(null, {})).toBe(true);
+    expect(shouldShowQuestion(undefined, {})).toBe(true);
     expect(shouldShowQuestion([], {})).toBe(true);
+    expect(shouldShowQuestion({}, {})).toBe(true);
   });
 
   it("hides a question until its dependency answer matches", () => {

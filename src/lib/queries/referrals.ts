@@ -59,6 +59,7 @@ export interface ReferralDetail {
   id: string;
   referral_code: string;
   status: ReferralStatus;
+  created_at: string;
   source_facility_id: string;
   destination_facility_id: string;
   referral_events: {
