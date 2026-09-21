@@ -14,6 +14,7 @@ import { useRecentPatients } from "@/lib/queries/patients";
 import { useRecentEncounters } from "@/lib/queries/encounters";
 import { usePendingReferralAlert } from "@/lib/queries/referrals";
 import { NotificationBell } from "@/components/notifications/notification-bell";
+import { MobileNavMenu } from "@/components/nav/mobile-nav-menu";
 import type { WorkflowMode } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
 
@@ -58,6 +59,7 @@ export default function HomePage() {
   const initials = getInitials(displayName);
 
   async function switchMode(mode: WorkflowMode) {
+    if (mode === "reach") return;
     await setWorkflowMode(mode, true);
     setSwitcherOpen(false);
   }
@@ -75,7 +77,8 @@ export default function HomePage() {
           </h1>
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0">
+        {/* Desktop: Notifications + Avatar */}
+        <div className="hidden sm:flex items-center gap-2.5 shrink-0">
           <NotificationBell userId={userId} />
           <div
             title={displayName}
@@ -83,6 +86,11 @@ export default function HomePage() {
           >
             {initials}
           </div>
+        </div>
+
+        {/* Mobile: Hamburger Navigation Menu */}
+        <div className="flex sm:hidden shrink-0">
+          <MobileNavMenu />
         </div>
       </div>
 
@@ -116,16 +124,18 @@ export default function HomePage() {
           <div className="absolute top-full left-0 right-0 mt-2 z-40 bg-white rounded-[16px] shadow-lg p-1.5 flex flex-col gap-1 border-0 animate-in fade-in-50 zoom-in-95 duration-100">
             <button
               type="button"
-              onClick={() => switchMode("reach")}
-              className={cn(
-                "flex items-center gap-2.5 px-3.5 py-2.5 rounded-[10px] text-sm text-left transition-colors cursor-pointer",
-                workflowMode === "reach"
-                  ? "bg-[#f3f9ff] text-[#0057b7] font-medium"
-                  : "hover:bg-[#fafafa] text-[#242b33]"
-              )}
+              disabled
+              aria-disabled="true"
+              title="REACH mode is disabled"
+              className="flex items-center justify-between px-3.5 py-2.5 rounded-[10px] text-sm text-left opacity-50 cursor-not-allowed select-none text-[#6e8298]"
             >
-              <span className="size-2 rounded-full bg-[#0073F3]" />
-              <span>REACH Encounter</span>
+              <div className="flex items-center gap-2.5">
+                <span className="size-2 rounded-full bg-[#0073F3]" />
+                <span>REACH Encounter</span>
+              </div>
+              <span className="text-[10px] font-medium uppercase tracking-wider bg-neutral-100 text-[#6e8298] px-2 py-0.5 rounded-full">
+                Disabled
+              </span>
             </button>
             <button
               type="button"
@@ -285,58 +295,32 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Pending Referral Alert (in ECHO mode, NO border, NO shadow) */}
-      {workflowMode === "echo" && (
+      {/* Pending Referral Alert (NO border, NO shadow) */}
+      {pendingReferral && (
         <section>
-          {pendingReferral ? (
-            <div className="bg-[#fff1ed] rounded-[20px] sm:rounded-[24px] p-3.5 sm:p-4 flex items-center justify-between gap-3 border-0 shadow-none">
-              <div className="flex items-center gap-3">
-                <div className="size-9 sm:size-10 rounded-full bg-[#ffded6] text-[#e05338] flex items-center justify-center shrink-0">
-                  <Info className="size-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-[#8b2310]">
-                    1 Pending Referral
-                  </h3>
-                  <p className="text-xs text-[#ab3620] mt-0.5">
-                    Referral {pendingReferral.referral_code} is currently {pendingReferral.status}.
-                  </p>
-                </div>
+          <div className="bg-[#fff1ed] rounded-[20px] sm:rounded-[24px] p-3.5 sm:p-4 flex items-center justify-between gap-3 border-0 shadow-none">
+            <div className="flex items-center gap-3">
+              <div className="size-9 sm:size-10 rounded-full bg-[#ffded6] text-[#e05338] flex items-center justify-center shrink-0">
+                <Info className="size-5" />
               </div>
-
-              <Link
-                href={`/referrals/${pendingReferral.id}`}
-                style={{ borderRadius: "12px" }}
-                className="bg-white text-[#e05338] hover:bg-[#ffded6]/60 text-xs font-medium px-3.5 py-1.5 rounded-[12px] flex items-center shrink-0 transition-colors border-0 shadow-none"
-              >
-                Review details
-              </Link>
-            </div>
-          ) : (
-            <div className="bg-[#fff1ed] rounded-[20px] sm:rounded-[24px] p-3.5 sm:p-4 flex items-center justify-between gap-3 border-0 shadow-none">
-              <div className="flex items-center gap-3">
-                <div className="size-9 sm:size-10 rounded-full bg-[#ffded6] text-[#e05338] flex items-center justify-center shrink-0">
-                  <Info className="size-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-[#8b2310]">
-                    1 Pending Referral
-                  </h3>
-                  <p className="text-xs text-[#ab3620] mt-0.5">
-                    Patient requires immediate attention for suspected Cholera.
-                  </p>
-                </div>
+              <div>
+                <h3 className="text-sm font-semibold text-[#8b2310]">
+                  1 Pending Referral
+                </h3>
+                <p className="text-xs text-[#ab3620] mt-0.5">
+                  Referral {pendingReferral.referral_code} is currently {pendingReferral.status}.
+                </p>
               </div>
-
-              <Link
-                href="/referrals"
-                style={{ borderRadius: "12px" }}
-                className="bg-white text-[#e05338] hover:bg-[#ffded6]/60 text-xs font-medium px-3.5 py-1.5 rounded-[12px] flex items-center shrink-0 transition-colors border-0 shadow-none"
-              >
-                Review details
-              </Link>
             </div>
-          )}
+
+            <Link
+              href={`/referrals/${pendingReferral.id}`}
+              style={{ borderRadius: "12px" }}
+              className="bg-white text-[#e05338] hover:bg-[#ffded6]/60 text-xs font-medium px-3.5 py-1.5 rounded-[12px] flex items-center shrink-0 transition-colors border-0 shadow-none"
+            >
+              Review details
+            </Link>
+          </div>
         </section>
       )}
 
@@ -460,7 +444,7 @@ export default function HomePage() {
 
                   {/* Action Button: 12px rounded, no border */}
                   <Link
-                    href={`/encounters`}
+                    href={`/encounters/${e.id}`}
                     style={{ borderRadius: "12px" }}
                     className="bg-white text-[#0073f3] hover:bg-[#0073f3]/5 px-3 py-1.5 sm:px-4 sm:py-1.5 rounded-[12px] text-xs sm:text-sm font-medium shrink-0 transition-colors border-0 shadow-none"
                   >

@@ -2,8 +2,11 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSession } from "@/lib/session/session-context";
+import { createClient } from "@/lib/supabase/client";
 import { syncController } from "@/lib/offline/sync";
+import { createIdempotencyKey } from "@/lib/logic/idempotency";
 import { useDestinationFacilities } from "@/lib/queries/referrals";
 import { ReferralConsentModal } from "@/components/echo/referral-consent-modal";
 import { ReferralGeneratedSheet } from "@/components/echo/referral-generated-sheet";
@@ -22,6 +25,7 @@ export function StepReferral({
   patientName?: string;
   onComplete: () => void;
 }) {
+  const queryClient = useQueryClient();
   const { activeFacility, userId } = useSession();
   const [referralCode, setReferralCode] = useState<string | null>(null);
   const { data: destinationFacilities } = useDestinationFacilities(
@@ -33,40 +37,50 @@ export function StepReferral({
     signatureMethod?: "type" | "draw";
     signatureText?: string;
   }) => {
-    // Generate referral code format: REF-XXXX-XXX
+    // Generate fallback code format: REF-XXXX-XXX
     const randomChars = Math.random().toString(36).substring(2, 6).toUpperCase();
     const randomSuffix = Math.random().toString(36).substring(2, 5).toUpperCase();
-    const generatedCode = `REF-${randomChars}-${randomSuffix}`;
+    const fallbackCode = `REF-${randomChars}-${randomSuffix}`;
     const referralId = crypto.randomUUID();
     const destinationFacilityId =
       destinationFacilities?.[0]?.id || "00000000-0000-0000-0000-000000000011";
 
+    const supabase = createClient();
+    let finalCode = fallbackCode;
+
     try {
-      await syncController.enqueue("referral", referralId, "insert", {
-        id: referralId,
-        encounterId,
-        encounter_id: encounterId,
-        organizationId: activeFacility.organizationId,
-        organization_id: activeFacility.organizationId,
-        destinationFacilityId,
-        destination_facility_id: destinationFacilityId,
-        originatingFacilityId: activeFacility.facilityId,
-        originating_facility_id: activeFacility.facilityId,
-        privacyMode: data.referralMode,
-        privacy_mode: data.referralMode,
-        consentId: data.referralMode === "identified" ? consentId : null,
-        consent_id: data.referralMode === "identified" ? consentId : null,
-        referralCode: generatedCode,
-        referral_code: generatedCode,
-        status: "pending",
-        createdBy: userId,
-        created_by: userId,
+      const { data: refResult, error: refError } = await supabase.rpc("create_referral", {
+        p_encounter_id: encounterId,
+        p_destination_facility_id: destinationFacilityId,
+        p_privacy_mode: data.referralMode,
+        p_consent_id: data.referralMode === "identified" ? consentId : null,
+        p_idempotency_key: createIdempotencyKey(),
       });
+
+      if (!refError && refResult) {
+        finalCode = refResult.referral_code;
+        await queryClient.invalidateQueries({ queryKey: ["referrals"] });
+      } else {
+        console.warn("create_referral RPC note:", refError);
+        // Fallback: enqueue in offline outbox
+        await syncController.enqueue("referral", referralId, "insert", {
+          id: referralId,
+          encounter_id: encounterId,
+          organization_id: activeFacility.organizationId,
+          destination_facility_id: destinationFacilityId,
+          originating_facility_id: activeFacility.facilityId,
+          privacy_mode: data.referralMode,
+          consent_id: data.referralMode === "identified" ? consentId : null,
+          referral_code: fallbackCode,
+          status: "created",
+          created_by: userId,
+        });
+      }
     } catch (e) {
-      console.warn("Offline outbox queue note:", e);
+      console.warn("create_referral exception:", e);
     }
 
-    setReferralCode(generatedCode);
+    setReferralCode(finalCode);
     toast.success("Referral successfully created");
   };
 

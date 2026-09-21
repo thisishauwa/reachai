@@ -18,7 +18,8 @@ const SessionContext = createContext<SessionContextValue | null>(null);
 function readCachedWorkflow(): WorkflowMode | null {
   if (typeof window === "undefined") return null;
   const value = window.localStorage.getItem(WORKFLOW_STORAGE_KEY);
-  return value === "reach" || value === "echo" ? value : null;
+  if (value === "reach") return "echo";
+  return value === "echo" ? value : null;
 }
 
 export function SessionProvider({
@@ -29,11 +30,15 @@ export function SessionProvider({
   children: React.ReactNode;
 }) {
   const [workflowMode, setWorkflowModeState] = useState<WorkflowMode | null>(
-    () => session.preferredWorkflow ?? readCachedWorkflow()
+    () => {
+      const preferred = session.preferredWorkflow ?? readCachedWorkflow();
+      return preferred === "reach" ? "echo" : (preferred ?? "echo");
+    }
   );
 
   const setWorkflowMode = useCallback(
     async (mode: WorkflowMode, remember: boolean) => {
+      if (mode === "reach") return; // REACH mode is disabled
       setWorkflowModeState(mode);
       if (typeof window !== "undefined") {
         window.localStorage.setItem(WORKFLOW_STORAGE_KEY, mode);

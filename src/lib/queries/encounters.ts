@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 
-export function useRecentEncounters(facilityId: string, limit = 2) {
+export function useRecentEncounters(facilityId: string, limit = 5) {
   return useQuery({
     queryKey: ["encounters", "recent", facilityId, limit],
     queryFn: async () => {
@@ -14,7 +14,6 @@ export function useRecentEncounters(facilityId: string, limit = 2) {
           "id, encounter_code, workflow_mode, privacy_mode, status, session_code, started_at, patient_id, patients!encounters_patient_id_fkey(full_name)"
         )
         .eq("facility_id", facilityId)
-        .eq("status", "completed")
         .order("started_at", { ascending: false })
         .limit(limit);
       if (error) throw error;
@@ -35,7 +34,6 @@ export function useEncounters(facilityId: string | undefined) {
           "id, encounter_code, workflow_mode, privacy_mode, status, session_code, started_at, patient_id, patients!encounters_patient_id_fkey(full_name)"
         )
         .eq("facility_id", facilityId!)
-        .eq("status", "completed")
         .order("started_at", { ascending: false })
         .limit(50);
       if (error) throw error;

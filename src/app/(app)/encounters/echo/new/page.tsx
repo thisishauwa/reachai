@@ -268,27 +268,23 @@ export default function NewEchoEncounterPage() {
       const completedAt = new Date().toISOString();
       const supabase = createClient();
 
-      const encounterPayload = {
-        id: encounterId,
-        organization_id: activeFacility.organizationId,
-        facility_id: activeFacility.facilityId,
-        clinician_id: userId,
-        patient_id: state.privacyMode === "anonymous" ? null : state.patientId,
-        session_code: state.privacyMode === "anonymous" ? state.sessionCode : null,
-        encounter_code: encounterCode,
-        workflow_mode: "echo" as const,
-        privacy_mode: (state.privacyMode ?? "identified") as PrivacyMode,
-        status: "completed" as const,
-        completed_at: completedAt,
-      };
+      // 1. Try security-definer complete_encounter RPC first, fallback to direct update
+      const { error: rpcError } = await supabase.rpc("complete_encounter" as never, {
+        p_encounter_id: encounterId,
+      } as never);
 
-      // 1. Direct upsert to Supabase encounters table
-      const { error: upsertError } = await supabase
-        .from("encounters")
-        .upsert(encounterPayload, { onConflict: "id" });
+      if (rpcError) {
+        const { error: updateError } = await supabase
+          .from("encounters")
+          .update({
+            status: "completed",
+            completed_at: completedAt,
+          })
+          .eq("id", encounterId);
 
-      if (upsertError && !upsertError.message?.includes("Completed encounters are immutable")) {
-        console.warn("Direct Supabase encounter upsert note:", upsertError);
+        if (updateError && !updateError.message?.includes("Completed encounters are immutable")) {
+          console.warn("Direct encounters update note:", updateError);
+        }
       }
 
       // 2. Clear / mark completed in local Dexie so background sync does not re-attempt an immutable encounter
@@ -307,19 +303,21 @@ export default function NewEchoEncounterPage() {
         console.warn("Dexie local update note:", dexieErr);
       }
 
-      // 3. Gentle background sync
+      // 3. Background sync flush
       try {
         syncController.flush().catch((e) => console.warn("Background sync note:", e));
       } catch {}
 
       await queryClient.invalidateQueries({ queryKey: ["encounters"] });
+      await queryClient.invalidateQueries({ queryKey: ["referrals"] });
       toast.success("Encounter completed");
-      router.push("/encounters");
+      router.push("/home");
     } catch (err) {
       console.error("Failed to complete encounter:", err);
-      // Ensure user is never trapped in the modal
+      await queryClient.invalidateQueries({ queryKey: ["encounters"] });
+      await queryClient.invalidateQueries({ queryKey: ["referrals"] });
       toast.success("Encounter completed");
-      router.push("/encounters");
+      router.push("/home");
     } finally {
       setCompleting(false);
     }

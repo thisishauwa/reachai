@@ -5,6 +5,7 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { useSession } from "@/lib/session/session-context";
 import { useReferrals } from "@/lib/queries/referrals";
+import { MobileSubpageHeader } from "@/components/nav/mobile-subpage-header";
 
 export default function ReferralsPage() {
   const { activeFacility } = useSession();
@@ -15,13 +16,16 @@ export default function ReferralsPage() {
   );
 
   return (
-    <div className="flex flex-col gap-6 pt-4 sm:pt-6">
+    <div className="flex flex-col gap-4 sm:gap-6 pt-2 sm:pt-6">
+      {/* Mobile Top Navigation Bar: Back to Home + Screen Title + Consistent Menu */}
+      <MobileSubpageHeader title="Referrals" backHref="/home" />
+
       {/* Top Header */}
       <div>
-        <h1 className="text-2xl sm:text-[28px] font-medium text-[#001f3e] tracking-tight">
+        <h1 className="hidden sm:block text-xl sm:text-[28px] font-medium text-[#001f3e] tracking-tight">
           All referrals
         </h1>
-        <p className="text-base text-[#8e8e8e] mt-0.5">
+        <p className="text-xs sm:text-base text-[#8e8e8e] mt-0.5">
           Showing all{" "}
           <span className="font-medium text-[#495766]">
             {referrals.length} referrals

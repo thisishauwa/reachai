@@ -132,7 +132,7 @@ export function StepDemographics({
               </div>
               <div className="flex flex-col gap-0.5">
                 <h3 className="font-medium text-[#242b33] text-base sm:text-lg">
-                  Identified referral data
+                  Identified data
                 </h3>
                 <p className="text-sm sm:text-base text-[#6e8298]">
                   Personal identifiers will be collected to coordinate care with the

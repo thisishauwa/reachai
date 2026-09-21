@@ -13,21 +13,22 @@ import {
   ReachEncounterIcon,
   EchoEncounterIcon,
 } from "@/components/brand/echo-logo";
+import { MobileSubpageHeader } from "@/components/nav/mobile-subpage-header";
 
 export default function WorkflowChooserPage() {
   const router = useRouter();
   const { setWorkflowMode, workflowMode } = useSession();
   const [selected, setSelected] = useState<WorkflowMode | null>(
-    workflowMode ?? "reach"
+    workflowMode === "reach" ? "echo" : (workflowMode ?? "echo")
   );
   const [remember, setRemember] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   async function handleContinue() {
-    if (!selected || submitting) return;
+    if (!selected || selected === "reach" || submitting) return;
     setSubmitting(true);
     try {
-      await setWorkflowMode(selected, remember);
+      await setWorkflowMode("echo", remember);
       router.push("/home");
       router.refresh();
     } finally {
@@ -37,6 +38,9 @@ export default function WorkflowChooserPage() {
 
   return (
     <div className="w-full max-w-[620px] bg-white dark:bg-card border border-[#e4e8ec] dark:border-border rounded-[12px] shadow-sm p-5 flex flex-col animate-in fade-in-50 duration-200">
+      {/* Mobile Top Navigation Bar */}
+      <MobileSubpageHeader backHref="/home" backLabel="Home" title="Workflow Mode" className="mb-4" />
+
       {/* Brand Logo */}
       <div className="mb-3">
         <EchoReachLogo className="w-[46px] h-[38px]" />
@@ -54,27 +58,20 @@ export default function WorkflowChooserPage() {
 
       {/* Option Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-        {/* REACH Encounter Card */}
+        {/* REACH Encounter Card (Disabled) */}
         <div
           role="button"
-          tabIndex={0}
-          onClick={() => setSelected("reach")}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              setSelected("reach");
-            }
-          }}
-          aria-pressed={selected === "reach"}
-          className={cn(
-            "group relative flex flex-col justify-between min-h-[145px] p-4 rounded-[8px] bg-[#fbfbfc] dark:bg-card cursor-pointer transition-all duration-150 outline-none text-left select-none",
-            selected === "reach"
-              ? "border-2 border-[#0073f3] ring-2 ring-[#0073f3]/15 shadow-xs"
-              : "border border-[#e4e8ec] dark:border-border hover:border-border/80 hover:shadow-xs"
-          )}
+          aria-disabled="true"
+          title="REACH Encounter is currently disabled"
+          className="group relative flex flex-col justify-between min-h-[145px] p-4 rounded-[8px] bg-[#fbfbfc] dark:bg-card border border-[#e4e8ec] dark:border-border opacity-50 cursor-not-allowed text-left select-none"
         >
-          <div className="size-10 rounded-full bg-[#f2f3f5] dark:bg-muted flex items-center justify-center shrink-0">
-            <ReachEncounterIcon className="size-5 text-[#141B34] dark:text-foreground" />
+          <div className="flex items-center justify-between">
+            <div className="size-10 rounded-full bg-[#f2f3f5] dark:bg-muted flex items-center justify-center shrink-0">
+              <ReachEncounterIcon className="size-5 text-[#141B34] dark:text-foreground" />
+            </div>
+            <span className="text-[10px] font-medium uppercase tracking-wider bg-[#f0f2f5] text-[#6e8298] px-2 py-0.5 rounded-full">
+              Disabled
+            </span>
           </div>
 
           <div className="mt-3">

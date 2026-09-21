@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { ArrowLeft, Clock } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { MobileNavMenu } from "@/components/nav/mobile-nav-menu";
 
 interface EncounterHeaderProps {
   title?: string;
@@ -74,7 +75,7 @@ export function EncounterHeader({
       {/* Right side: actual encounter timer only */}
       <div className="flex items-center gap-2 shrink-0">
         <div
-          className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm sm:text-base font-medium tabular-nums transition-colors duration-500 shadow-sm ${colorClass}`}
+          className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm sm:text-base font-medium tabular-nums transition-colors duration-500 border-0 shadow-none ${colorClass}`}
           title="Encounter duration"
         >
           <Clock className="size-4 shrink-0" />
@@ -82,6 +83,9 @@ export function EncounterHeader({
             <span className="text-[10px] font-bold uppercase tracking-wider mr-0.5">!</span>
           ) : null}
           <span>{formatElapsed(elapsed)}</span>
+        </div>
+        <div className="flex sm:hidden shrink-0">
+          <MobileNavMenu />
         </div>
       </div>
     </div>

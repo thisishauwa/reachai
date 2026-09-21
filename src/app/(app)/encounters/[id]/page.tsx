@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEncounter } from "@/lib/queries/encounters";
 import { createClient } from "@/lib/supabase/client";
+import { MobileSubpageHeader } from "@/components/nav/mobile-subpage-header";
 
 export default function EncounterDetailPage() {
   const params = useParams();
@@ -207,22 +208,39 @@ export default function EncounterDetailPage() {
         </div>
       )}
 
-      {/* Top Header */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5 sm:gap-4 min-w-0">
+      {/* Mobile Top Navigation Bar */}
+      <MobileSubpageHeader
+        title={encounter.encounter_code || "Encounter details"}
+        backHref="/encounters"
+        backLabel="Encounters"
+        rightElement={
+          <button
+            type="button"
+            onClick={() => setShowDeleteConfirm(true)}
+            className="size-10 rounded-full bg-red-50 hover:bg-red-100 text-[#d44424] flex items-center justify-center transition-colors shrink-0 cursor-pointer"
+            title="Delete encounter"
+          >
+            <Trash2 className="size-4" />
+          </button>
+        }
+      />
+
+      {/* Desktop Top Header */}
+      <div className="hidden sm:flex items-center justify-between gap-4">
+        <div className="flex items-center gap-4 min-w-0">
           <button
             type="button"
             onClick={() => router.push("/encounters")}
-            className="size-10 sm:size-14 rounded-full bg-[#f7f7f7] hover:bg-[#eaeaea] flex items-center justify-center transition-colors shrink-0 cursor-pointer"
+            className="size-14 rounded-full bg-[#f7f7f7] hover:bg-[#eaeaea] flex items-center justify-center transition-colors shrink-0 cursor-pointer"
             aria-label="Back to encounters"
           >
-            <ArrowLeft className="size-5 sm:size-6 text-[#495766]" />
+            <ArrowLeft className="size-6 text-[#495766]" />
           </button>
           <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl font-medium text-[#001f3e] tracking-tight truncate">
+            <h1 className="text-2xl font-medium text-[#001f3e] tracking-tight truncate">
               {encounter.encounter_code || "Encounter details"}
             </h1>
-            <p className="text-xs sm:text-sm text-[#6e8298]">
+            <p className="text-sm text-[#6e8298]">
               {format(dateObj, "EEEE, MMMM d, yyyy")}
             </p>
           </div>
@@ -231,7 +249,7 @@ export default function EncounterDetailPage() {
         <button
           type="button"
           onClick={() => setShowDeleteConfirm(true)}
-          className="size-10 sm:size-12 rounded-[12px] bg-red-50 hover:bg-red-100 text-[#d44424] flex items-center justify-center transition-colors shrink-0 cursor-pointer"
+          className="size-12 rounded-[12px] bg-red-50 hover:bg-red-100 text-[#d44424] flex items-center justify-center transition-colors shrink-0 cursor-pointer"
           title="Delete encounter"
         >
           <Trash2 className="size-5" />

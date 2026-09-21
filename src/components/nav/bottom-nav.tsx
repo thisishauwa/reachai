@@ -71,7 +71,7 @@ export function BottomNav() {
   }
 
   return (
-    <div className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-30 px-3 pointer-events-none">
+    <div className="hidden sm:block fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-30 px-3 pointer-events-none">
       <nav
         aria-label="App Navigation"
         className="pointer-events-auto bg-[#000000] text-white rounded-full px-5 sm:px-7 py-2.5 shadow-2xl border border-white/10 backdrop-blur-md flex items-center gap-5 sm:gap-7 transition-all duration-200"

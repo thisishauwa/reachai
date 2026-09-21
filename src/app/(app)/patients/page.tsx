@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Send, Smile } from "lucide-react";
 import { useSession } from "@/lib/session/session-context";
 import { usePatients } from "@/lib/queries/patients";
+import { MobileSubpageHeader } from "@/components/nav/mobile-subpage-header";
 
 function getInitials(name: string) {
   const parts = name.trim().split(/\s+/);
@@ -41,14 +42,17 @@ export default function PatientsPage() {
   }, [patients]);
 
   return (
-    <div className="flex flex-col gap-5 pt-4 sm:pt-6">
+    <div className="flex flex-col gap-4 sm:gap-5 pt-2 sm:pt-6">
+      {/* Mobile Top Navigation Bar: Back to Home + Screen Title + Consistent Menu */}
+      <MobileSubpageHeader title="Patients" backHref="/home" />
+
       {/* Top Header */}
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl sm:text-[28px] font-normal text-[#495766] tracking-[-0.3px]">
+          <h1 className="hidden sm:block text-xl sm:text-[28px] font-normal text-[#495766] tracking-[-0.3px]">
             All patients
           </h1>
-          <p className="text-sm sm:text-base text-[#6e8298] mt-0.5">
+          <p className="text-xs sm:text-base text-[#6e8298] mt-0.5">
             Showing all{" "}
             <span className="font-medium text-[#242b33]">
               {patients.length} patients
@@ -59,7 +63,7 @@ export default function PatientsPage() {
         <Link
           href="/patients/new"
           style={{ borderRadius: "12px", border: "none", boxShadow: "none" }}
-          className="bg-[#0073F3] hover:bg-[#0062d4] text-white font-medium text-sm sm:text-[15px] px-4 sm:px-5 py-2.5 h-[48px] sm:h-[52px] rounded-[12px] flex items-center justify-center shrink-0 border-0 shadow-none transition-colors"
+          className="bg-[#0073F3] hover:bg-[#0062d4] text-white font-medium text-xs sm:text-[15px] px-3.5 sm:px-5 py-2 sm:py-2.5 h-[38px] sm:h-[52px] rounded-[12px] flex items-center justify-center shrink-0 border-0 shadow-none transition-colors"
         >
           Create new patient
         </Link>

@@ -37,7 +37,7 @@ export function StepPrivacyMode({
         )}
       >
         <CardHeader>
-          <CardTitle className="text-base">Identified referral mode</CardTitle>
+          <CardTitle className="text-base">Identified mode</CardTitle>
           <CardDescription>
             Collects patient identifiers to coordinate care with the referral
             clinic. Requires explicit data-sharing consent and a signature.

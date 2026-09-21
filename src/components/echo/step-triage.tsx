@@ -38,8 +38,8 @@ export function StepTriage({
 
   const runEvaluation = useCallback(async () => {
     setLoading(true);
+    const supabase = createClient();
     try {
-      const supabase = createClient();
 
       // 1. Resolve syndromeId to a valid database UUID
       let validSyndromeId = syndromeId;
@@ -150,6 +150,28 @@ export function StepTriage({
           triage_rule_id: null,
         };
 
+        try {
+          await supabase.from("triage_outcomes").upsert(
+            {
+              id: fallbackOutcome.id,
+              encounter_id: encounterId,
+              severity: fallbackOutcome.severity,
+              condition_code: fallbackOutcome.condition_code,
+              condition_label_en: fallbackOutcome.condition_label_en,
+              condition_label_ha: fallbackOutcome.condition_label_ha,
+              guidance_en: fallbackOutcome.guidance_en,
+              guidance_ha: fallbackOutcome.guidance_ha,
+              ipc_guidance_en: fallbackOutcome.ipc_guidance_en,
+              referral_required: true,
+              evaluated_inputs: {},
+              ruleset_snapshot: [],
+            },
+            { onConflict: "encounter_id" }
+          );
+        } catch (dbErr) {
+          console.warn("Direct triage_outcomes save note:", dbErr);
+        }
+
         setOutcome(fallbackOutcome as unknown as TriageOutcomeRow);
         return;
       }
@@ -160,10 +182,10 @@ export function StepTriage({
       const isEmergency =
         syndromeId.toUpperCase().includes("DIARRHOEA") ||
         syndromeId.toUpperCase().includes("BLEEDING");
-      setOutcome({
+      const fallbackOutcome = {
         id: crypto.randomUUID(),
         encounter_id: encounterId,
-        severity: isEmergency ? "emergency" : "urgent",
+        severity: (isEmergency ? "emergency" : "urgent") as TriageSeverity,
         condition_code: isEmergency ? "AWD_CHOLERA" : "MALARIA",
         condition_label_en: isEmergency ? "Suspected Cholera" : "Severe Malaria",
         condition_label_ha: null,
@@ -181,7 +203,29 @@ export function StepTriage({
         acknowledged_by: null,
         override_reason: null,
         triage_rule_id: null,
-      });
+      };
+
+      try {
+        await supabase.from("triage_outcomes").upsert(
+          {
+            id: fallbackOutcome.id,
+            encounter_id: encounterId,
+            severity: fallbackOutcome.severity,
+            condition_code: fallbackOutcome.condition_code,
+            condition_label_en: fallbackOutcome.condition_label_en,
+            guidance_en: fallbackOutcome.guidance_en,
+            ipc_guidance_en: fallbackOutcome.ipc_guidance_en,
+            referral_required: true,
+            evaluated_inputs: {},
+            ruleset_snapshot: [],
+          },
+          { onConflict: "encounter_id" }
+        );
+      } catch (dbErr) {
+        console.warn("Direct triage_outcomes save note on catch:", dbErr);
+      }
+
+      setOutcome(fallbackOutcome as unknown as TriageOutcomeRow);
     } finally {
       setLoading(false);
     }

@@ -6,6 +6,7 @@ import { format, isToday } from "date-fns";
 import { createClient } from "@/lib/supabase/client";
 import { useSession } from "@/lib/session/session-context";
 import { useSyncStatus } from "@/lib/offline/use-sync-status";
+import { MobileSubpageHeader } from "@/components/nav/mobile-subpage-header";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -161,9 +162,12 @@ export default function SettingsPage() {
   const displayStaffId = staffId || "HS-98234";
 
   return (
-    <div className="flex flex-col gap-6 pt-4 sm:pt-6">
-      {/* Top Header */}
-      <div className="pt-2">
+    <div className="flex flex-col gap-4 sm:gap-6 pt-2 sm:pt-6">
+      {/* Mobile Top Navigation Bar: Back to Home + Screen Title + Consistent Menu */}
+      <MobileSubpageHeader title="Settings" backHref="/home" />
+
+      {/* Desktop Top Header */}
+      <div className="hidden sm:block pt-1">
         <h1 className="text-[24px] sm:text-[28px] font-normal text-[#001f3e] tracking-[-0.3px] leading-[30px]">
           Settings
         </h1>

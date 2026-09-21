@@ -101,7 +101,7 @@ export function ReferralConsentModal({
           </div>
           <div className="flex flex-col gap-1">
             <span className="font-semibold text-base text-[#242b33]">
-              Identified Referral Mode
+              Identified Mode
             </span>
             <p className="text-xs sm:text-sm text-[#6e8298] leading-relaxed">
               Shares patient name and details with REACH clinic for seamless care

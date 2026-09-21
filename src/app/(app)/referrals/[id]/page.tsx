@@ -9,6 +9,7 @@ import { canTransitionReferral } from "@/lib/logic/referral-state-machine";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { format } from "date-fns";
+import { MobileSubpageHeader } from "@/components/nav/mobile-subpage-header";
 import type { ReferralStatus } from "@/lib/supabase/database.types";
 
 export default function ReferralDetailPage() {
@@ -86,8 +87,22 @@ export default function ReferralDetailPage() {
 
   return (
     <div className="flex flex-col gap-6 pt-4 sm:pt-6">
-      {/* Top Header */}
-      <div className="flex items-center justify-between gap-4">
+      {/* Mobile Top Navigation Bar: Back + Title + Code + Menu */}
+      <MobileSubpageHeader
+        title="Referral Details"
+        backHref="/referrals"
+        backLabel="Referrals"
+        rightElement={
+          <div className="bg-[#ffdcd5] px-2.5 py-1 rounded-full shrink-0 border-0 shadow-none">
+            <span className="text-[#d44424] font-mono text-xs font-semibold">
+              {referral.referral_code}
+            </span>
+          </div>
+        }
+      />
+
+      {/* Desktop Top Header */}
+      <div className="hidden sm:flex items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <button
             type="button"
@@ -107,13 +122,15 @@ export default function ReferralDetailPage() {
           </h1>
         </div>
 
-        <div 
-          style={{ border: "none", boxShadow: "none" }}
-          className="bg-[#ffdcd5] px-2.5 py-0.5 rounded-full shrink-0 border-0 shadow-none"
-        >
-          <span className="text-[#d44424] font-mono text-xs sm:text-sm font-medium">
-            {referral.referral_code}
-          </span>
+        <div className="flex items-center gap-2">
+          <div 
+            style={{ border: "none", boxShadow: "none" }}
+            className="bg-[#ffdcd5] px-2.5 py-0.5 rounded-full shrink-0 border-0 shadow-none"
+          >
+            <span className="text-[#d44424] font-mono text-xs sm:text-sm font-medium">
+              {referral.referral_code}
+            </span>
+          </div>
         </div>
       </div>
 

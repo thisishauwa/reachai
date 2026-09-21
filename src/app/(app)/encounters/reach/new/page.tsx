@@ -154,8 +154,9 @@ export default function NewReachEncounterPage() {
     });
 
     await queryClient.invalidateQueries({ queryKey: ["encounters"] });
+    await queryClient.invalidateQueries({ queryKey: ["referrals"] });
     toast.success("Encounter completed and saved");
-    router.push("/encounters");
+    router.push("/home");
   }
 
   return (

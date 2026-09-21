@@ -36,7 +36,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         className={cn(
           "mx-auto flex w-full flex-1 flex-col px-4 sm:px-6",
           pathname === "/patients/new" ? "max-w-4xl" : "max-w-2xl",
-          isFullScreenForm ? "pb-12" : "pb-28"
+          isFullScreenForm ? "pb-12" : "pb-10 sm:pb-28"
         )}
       >
         {children}

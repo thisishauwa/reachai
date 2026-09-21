@@ -11,6 +11,7 @@ import { usePatientEncounters } from "@/lib/queries/encounters";
 import { createClient } from "@/lib/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
+import { MobileSubpageHeader } from "@/components/nav/mobile-subpage-header";
 
 type TabKey = "summary" | "encounters" | "prescriptions" | "history";
 
@@ -140,12 +141,29 @@ export default function PatientProfilePage() {
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex items-center justify-between relative py-2">
+      {/* Mobile Top Navigation Bar: Back + Title + Delete + Menu */}
+      <MobileSubpageHeader
+        title="Patient profile"
+        backHref="/patients"
+        backLabel="Patients"
+        rightElement={
+          <button
+            type="button"
+            onClick={() => setShowDeleteConfirm(true)}
+            className="size-10 rounded-full bg-[#fff5f2] hover:bg-[#ffe4de] flex items-center justify-center text-[#d44424] transition-colors cursor-pointer"
+            title="Remove patient"
+          >
+            <Trash2 className="size-4" />
+          </button>
+        }
+      />
+
+      {/* Desktop Header */}
+      <div className="hidden sm:flex items-center justify-between relative py-2">
         <button
           type="button"
           onClick={() => router.push("/patients")}
-          className="size-10 rounded-full bg-[#f4f5f7] hover:bg-[#e4e8ec] flex items-center justify-center text-[#242b33] transition-colors cursor-pointer"
+          className="size-10 sm:size-12 rounded-full bg-[#f4f5f7] hover:bg-[#e4e8ec] flex items-center justify-center text-[#242b33] transition-colors cursor-pointer"
         >
           <ArrowLeft className="size-5" />
         </button>
@@ -155,7 +173,7 @@ export default function PatientProfilePage() {
         <button
           type="button"
           onClick={() => setShowDeleteConfirm(true)}
-          className="size-10 rounded-full bg-[#fff5f2] hover:bg-[#ffe4de] flex items-center justify-center text-[#d44424] transition-colors cursor-pointer"
+          className="size-10 sm:size-12 rounded-full bg-[#fff5f2] hover:bg-[#ffe4de] flex items-center justify-center text-[#d44424] transition-colors cursor-pointer"
           title="Remove patient"
         >
           <Trash2 className="size-4" />

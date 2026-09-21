@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 import { syncController } from "@/lib/offline/sync";
 import { generatePatientCode } from "@/lib/reference/codes";
 import { ChevronDown, Calendar } from "lucide-react";
+import { MobileSubpageHeader } from "@/components/nav/mobile-subpage-header";
 
 const NIGERIAN_STATES = [
   "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno",
@@ -160,10 +161,13 @@ export default function NewPatientPage() {
   }
 
   return (
-    <div className="flex flex-col gap-8 pb-32 pt-4">
-      {/* Page Title */}
-      <div>
-        <h1 className="text-[24px] sm:text-[28px] font-normal text-[#001f3e] tracking-[-0.3px]">
+    <div className="flex flex-col gap-6 pb-32 pt-2 sm:pt-4">
+      {/* Mobile Top Navigation Bar: Back to Patients + Screen Title + Consistent Menu */}
+      <MobileSubpageHeader title="New Patient" backHref="/patients" backLabel="Patients" />
+
+      {/* Desktop Page Title */}
+      <div className="hidden sm:block">
+        <h1 className="text-[22px] sm:text-[28px] font-normal text-[#001f3e] tracking-[-0.3px]">
           Create new patient
         </h1>
       </div>
