@@ -14,6 +14,7 @@ import {
   Stethoscope,
   Volume2,
   VolumeX,
+  Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSyndromes } from "@/lib/queries/reference";
@@ -25,7 +26,8 @@ interface StepSyndromeProps {
   patientCreatedAt?: string;
   isAnonymous?: boolean;
   sessionCode?: string;
-  onSelect: (syndromeId: string, labelEn: string) => void;
+  /** Called with the array of selected IDs and their English labels */
+  onSelect: (syndromeIds: string[], labels: string[]) => void;
   onPrevious?: () => void;
 }
 
@@ -82,15 +84,28 @@ export function StepSyndrome({
   const { data: dbSyndromes = [], isLoading } = useSyndromes();
   const syndromes = dbSyndromes.length > 0 ? dbSyndromes : FALLBACK_SYNDROMES;
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [hausaAudioOn, setHausaAudioOn] = useState(false);
 
+  const toggleSyndrome = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
   const handleNext = () => {
-    if (!selectedId) return;
-    const found = syndromes.find((s) => s.id === selectedId);
-    if (found) {
-      onSelect(found.id, found.label_en);
-    }
+    if (selectedIds.size === 0) return;
+    const selected = syndromes.filter((s) => selectedIds.has(s.id));
+    onSelect(
+      selected.map((s) => s.id),
+      selected.map((s) => s.label_en)
+    );
   };
 
   return (
@@ -106,11 +121,11 @@ export function StepSyndrome({
               Chief complaint
             </span>
             <h2 className="text-xl sm:text-2xl font-light text-[#001f3e] leading-snug">
-              Select the patient and their primary reason for visiting today.
+              Select one or more chief complaints for this visit.
             </h2>
           </div>
 
-          {/* Patient Card Banner (Figma 0:1264) */}
+          {/* Patient Card Banner */}
           <div className="bg-[#f2f3f5] rounded-[20px] px-5 py-4 flex items-center justify-between">
             <div className="flex flex-col gap-0.5">
               <span className="font-medium text-base text-[#001f3f]">
@@ -127,7 +142,9 @@ export function StepSyndrome({
           {/* Subheader: Primary Symptom & Hausa Audio Toggle */}
           <div className="flex items-center justify-between pt-1">
             <span className="text-xs uppercase tracking-wider text-[#6e8298] font-medium">
-              Primary symptom
+              {selectedIds.size === 0
+                ? "Select all that apply"
+                : `${selectedIds.size} selected`}
             </span>
             <button
               type="button"
@@ -148,7 +165,7 @@ export function StepSyndrome({
             </button>
           </div>
 
-          {/* Syndrome Grid */}
+          {/* Syndrome Grid — multi-select */}
           {isLoading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {Array.from({ length: 10 }).map((_, i) => (
@@ -158,12 +175,12 @@ export function StepSyndrome({
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {syndromes.map((syndrome) => {
-                const isSelected = selectedId === syndrome.id;
+                const isSelected = selectedIds.has(syndrome.id);
                 return (
                   <button
                     key={syndrome.id}
                     type="button"
-                    onClick={() => setSelectedId(syndrome.id)}
+                    onClick={() => toggleSyndrome(syndrome.id)}
                     className={cn(
                       "rounded-[16px] p-4 flex items-center gap-3.5 text-left transition-all cursor-pointer",
                       isSelected
@@ -179,7 +196,7 @@ export function StepSyndrome({
                     >
                       {getSyndromeIcon(syndrome.code)}
                     </div>
-                    <div className="flex flex-col gap-0.5 min-w-0">
+                    <div className="flex flex-col gap-0.5 min-w-0 flex-1">
                       <span
                         className={cn(
                           "font-medium text-sm sm:text-base truncate",
@@ -191,6 +208,17 @@ export function StepSyndrome({
                       <span className="text-xs text-[#6e8298] truncate">
                         {syndrome.label_ha}
                       </span>
+                    </div>
+                    {/* Checkbox indicator */}
+                    <div
+                      className={cn(
+                        "size-6 rounded-[6px] flex items-center justify-center shrink-0 transition-all border-2",
+                        isSelected
+                          ? "bg-[#0073f3] border-[#0073f3]"
+                          : "bg-white border-[#c7d2de]"
+                      )}
+                    >
+                      {isSelected && <Check className="size-3.5 text-white" strokeWidth={3} />}
                     </div>
                   </button>
                 );
@@ -219,11 +247,11 @@ export function StepSyndrome({
           )}
           <button
             type="button"
-            disabled={!selectedId}
+            disabled={selectedIds.size === 0}
             onClick={handleNext}
             className="rounded-[12px] bg-[#0073f3] hover:bg-[#0060cb] text-white px-8 py-3.5 text-sm sm:text-base font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
           >
-            Next
+            Next {selectedIds.size > 0 ? `(${selectedIds.size})` : ""}
           </button>
         </div>
       </div>

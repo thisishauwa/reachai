@@ -122,7 +122,8 @@ export default function EncounterDetailPage() {
     full_name: string;
     patient_code: string;
     sex?: string;
-    date_of_birth?: string;
+    age_band?: string;
+    phone_e164?: string;
     phone_number?: string;
     state?: string;
     lga?: string;
@@ -362,11 +363,11 @@ export default function EncounterDetailPage() {
             )}
           </div>
 
-          {patient?.phone_number && (
+          {(patient?.phone_e164 || patient?.phone_number) && (
             <div className="text-xs sm:text-sm text-[#6e8298] pt-1 border-t border-gray-100 flex items-center justify-between">
               <span>Phone:</span>
               <span className="font-medium text-[#242b33]">
-                {patient.phone_number}
+                {patient.phone_e164 || patient.phone_number}
               </span>
             </div>
           )}
@@ -399,8 +400,8 @@ export default function EncounterDetailPage() {
               Suspected Syndrome
             </span>
             <div className="flex flex-wrap gap-2">
-              {syndromesList.map((s, idx) => {
-                const synData = s.syndromes as { label_en?: string } | null;
+              {syndromesList.map((s: any, idx) => {
+                const synData = s?.syndromes as { label_en?: string } | null;
                 return (
                   <div
                     key={idx}
@@ -507,8 +508,8 @@ export default function EncounterDetailPage() {
           </div>
 
           <div className="flex flex-col gap-2.5">
-            {answers.map((ans, idx) => {
-              const q = (ans.questions as unknown) as { prompt_en?: string } | null;
+            {answers.map((ans: any, idx) => {
+              const q = (ans?.questions as unknown) as { prompt_en?: string } | null;
               const answerVal =
                 typeof ans.value === "object"
                   ? JSON.stringify(ans.value)

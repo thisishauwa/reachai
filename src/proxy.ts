@@ -29,8 +29,29 @@ export async function proxy(request: NextRequest) {
     },
   );
 
-  const { data } = await supabase.auth.getUser();
-  const isAuthed = !!data.user;
+  let isAuthed = false;
+  try {
+    const { data, error } = await supabase.auth.getUser();
+    if (!error && data?.user) {
+      isAuthed = true;
+    } else if (error) {
+      // If there's an error but auth-token cookie exists, check for network/transient failures
+      const hasAuthCookie = request.cookies
+        .getAll()
+        .some((c) => c.name.includes("auth-token") && Boolean(c.value));
+      if (hasAuthCookie && (error.message?.includes("fetch") || error.status === 500 || error.status === 503)) {
+        isAuthed = true;
+      }
+    }
+  } catch (err) {
+    const hasAuthCookie = request.cookies
+      .getAll()
+      .some((c) => c.name.includes("auth-token") && Boolean(c.value));
+    if (hasAuthCookie) {
+      isAuthed = true;
+    }
+  }
+
   const path = request.nextUrl.pathname;
   const isPublic = path.startsWith("/login") || path.startsWith("/auth");
   const isAsset =

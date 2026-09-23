@@ -407,7 +407,7 @@ export default function NewEchoEncounterPage() {
         />
       )}
 
-      {/* Step 3: Syndrome / Chief Complaint (Figma 0:1264, 0:1397, 0:1530, 0:1662) */}
+      {/* Step 3: Syndrome / Chief Complaint */}
       {state.step === "syndrome" && state.encounterId && (
         <StepSyndrome
           encounterCode={encounterCode}
@@ -416,22 +416,24 @@ export default function NewEchoEncounterPage() {
           isAnonymous={state.privacyMode === "anonymous"}
           sessionCode={state.sessionCode ?? undefined}
           onPrevious={() => setState((s) => ({ ...s, step: state.patientId ? "privacy" : "setup" }))}
-          onSelect={(syndromeId, label) =>
+          onSelect={(ids, labels) =>
             setState((s) => ({
               ...s,
-              syndromeId,
-              syndromeLabel: label,
+              syndromeIds: ids,
+              syndromeLabels: labels,
+              syndromeId: ids[0] ?? null,
+              syndromeLabel: labels[0] ?? null,
               step: "questions",
             }))
           }
         />
       )}
 
-      {/* Step 4: Questions (Figma 0:3639, 0:3684, 0:3331, 0:3504) */}
-      {state.step === "questions" && state.encounterId && state.syndromeId && (
+      {/* Step 4: Questions — flat single page for all selected syndromes */}
+      {state.step === "questions" && state.encounterId && state.syndromeIds.length > 0 && (
         <StepQuestions
-          syndromeId={state.syndromeId}
-          syndromeCode={state.syndromeId}
+          syndromeIds={state.syndromeIds}
+          syndromeLabels={state.syndromeLabels}
           encounterId={state.encounterId}
           encounterCode={encounterCode}
           patientName={state.patientName ?? "Patient"}
@@ -448,12 +450,13 @@ export default function NewEchoEncounterPage() {
       {/* Step 5: Triage */}
       {state.step === "triage" &&
         state.encounterId &&
-        state.syndromeId &&
+        state.syndromeIds.length > 0 &&
         state.questionSetId && (
           <StepTriage
             encounterId={state.encounterId}
-            syndromeId={state.syndromeId}
+            syndromeIds={state.syndromeIds}
             questionSetId={state.questionSetId}
+            answers={state.answers}
             onDone={(outcome) =>
               setState((s) => ({
                 ...s,

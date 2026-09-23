@@ -8,9 +8,15 @@ import { syncController } from "@/lib/offline/sync";
 import { useSession } from "@/lib/session/session-context";
 import { toast } from "sonner";
 
-interface StepQuestionsProps {
+interface SyndromeQuestionGroup {
   syndromeId: string;
-  syndromeCode?: string;
+  questions: FollowUpQuestion[];
+}
+
+interface StepQuestionsProps {
+  /** Multi-syndrome support: array of syndrome IDs */
+  syndromeIds: string[];
+  syndromeLabels?: string[];
   encounterId: string;
   encounterCode?: string;
   patientName?: string;
@@ -22,8 +28,8 @@ interface StepQuestionsProps {
 }
 
 export function StepQuestions({
-  syndromeId,
-  syndromeCode,
+  syndromeIds,
+  syndromeLabels = [],
   encounterId,
   encounterCode = "ABC-1234-98",
   patientName = "Oyintari Werinipre",
@@ -35,81 +41,132 @@ export function StepQuestions({
 }: StepQuestionsProps) {
   const { userId } = useSession();
   const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [playingCode, setPlayingCode] = useState<string | null>(null);
 
-  // Get syndrome-specific questions (with English and Hausa prompts)
-  const questions: FollowUpQuestion[] = useMemo(() => {
-    const code = syndromeCode || syndromeId;
-    return getFollowUpQuestions(code);
-  }, [syndromeCode, syndromeId]);
-
-  const currentQuestion = questions[currentIndex] || questions[0];
-  const totalQuestions = questions.length;
-  const currentAnswer = answers[currentQuestion.code];
-
-  const handleSelectOption = (value: string) => {
-    setAnswers((prev) => ({
-      ...prev,
-      [currentQuestion.code]: value,
+  // Aggregate questions from ALL selected syndromes
+  const groups: SyndromeQuestionGroup[] = useMemo(() => {
+    return syndromeIds.map((id) => ({
+      syndromeId: id,
+      questions: getFollowUpQuestions(id),
     }));
+  }, [syndromeIds]);
+
+  // All questions flattened (with deduplication by code)
+  const allQuestions = useMemo(() => {
+    const seen = new Set<string>();
+    const result: (FollowUpQuestion & { syndromeId: string })[] = [];
+    for (const group of groups) {
+      for (const q of group.questions) {
+        if (!seen.has(q.code)) {
+          seen.add(q.code);
+          result.push({ ...q, syndromeId: group.syndromeId });
+        }
+      }
+    }
+    return result;
+  }, [groups]);
+
+  const totalQuestions = allQuestions.length;
+  const answeredCount = allQuestions.filter((q) => answers[q.code] !== undefined).length;
+  const allAnswered = answeredCount === totalQuestions && totalQuestions > 0;
+
+  const handleSelectOption = (questionCode: string, value: string) => {
+    setAnswers((prev) => ({ ...prev, [questionCode]: value }));
   };
 
-  const handlePlayAudio = () => {
-    setIsPlayingAudio(true);
-    // Simulate audio playback or speech synthesis
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      try {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(currentQuestion.prompt_ha);
-        utterance.rate = 0.9;
-        utterance.onend = () => setIsPlayingAudio(false);
-        utterance.onerror = () => setIsPlayingAudio(false);
-        window.speechSynthesis.speak(utterance);
-      } catch {
-        setTimeout(() => setIsPlayingAudio(false), 2000);
-      }
-    } else {
-      setTimeout(() => setIsPlayingAudio(false), 2000);
+  const handlePlayAudio = (question: FollowUpQuestion) => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    setPlayingCode(question.code);
+    try {
+      const utterance = new SpeechSynthesisUtterance(question.prompt_ha);
+      utterance.rate = 0.9;
+      utterance.onend = () => setPlayingCode(null);
+      utterance.onerror = () => setPlayingCode(null);
+      window.speechSynthesis.speak(utterance);
+    } catch {
+      setPlayingCode(null);
     }
   };
 
-  const handleNext = async () => {
-    if (!currentAnswer) {
-      toast.error("Please select an option before proceeding");
+  const handleSubmit = async () => {
+    if (!allAnswered) {
+      toast.error("Please answer all questions before continuing");
       return;
     }
 
-    // Persist answer to offline sync outbox
-    const answerId = crypto.randomUUID();
-    try {
-      await syncController.enqueue("encounter_answer", answerId, "insert", {
-        id: answerId,
-        encounter_id: encounterId,
-        question_id: currentQuestion.code || currentQuestion.id,
-        value: { answer: currentAnswer },
-        answered_by: userId,
-        client_updated_at: new Date().toISOString(),
-      });
-    } catch (e) {
-      console.warn("Offline outbox queue note:", e);
+    // Persist answers to offline sync outbox
+    for (const question of allQuestions) {
+      const answerId = crypto.randomUUID();
+      try {
+        await syncController.enqueue("encounter_answer", answerId, "insert", {
+          id: answerId,
+          encounter_id: encounterId,
+          question_id: question.code,
+          value: { answer: answers[question.code] },
+          answered_by: userId,
+          client_updated_at: new Date().toISOString(),
+        });
+      } catch (e) {
+        console.warn("Offline outbox queue note:", e);
+      }
     }
 
-    if (currentIndex < totalQuestions - 1) {
-      setCurrentIndex((prev) => prev + 1);
-    } else {
-      // Completed all follow-up questions
-      onComplete(`qs_${syndromeId}`, answers);
-    }
+    onComplete(`qs_${syndromeIds.join("_")}`, answers);
   };
 
   const handleSaveDraft = () => {
     toast.success("Progress saved as draft");
   };
 
+  if (totalQuestions === 0) {
+    return (
+      <div className="w-full flex flex-col gap-5 pb-24 sm:pb-0">
+        <div className="bg-[#f9f9f9] rounded-[16px] px-5 py-4 flex items-center justify-between">
+          <div className="flex flex-col gap-0.5">
+            <span className="font-medium text-base text-[#242b33]">
+              {isAnonymous ? "Anonymous patient" : patientName}
+            </span>
+            <span className="text-sm text-[#6e8298]">
+              {isAnonymous
+                ? new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
+                : `Created ${patientCreatedAt}`}
+            </span>
+          </div>
+          <div className="bg-[#ffece5] text-[#d4583b] rounded-full px-3.5 py-1 text-xs sm:text-sm font-medium">
+            {isAnonymous ? sessionCode || "ABC-1234-98" : encounterCode}
+          </div>
+        </div>
+
+        <div className="bg-[#f9f9f9] rounded-[20px] p-6 sm:p-10 flex flex-col gap-4">
+          <p className="text-[#6e8298] text-base">
+            No follow-up questions for the selected syndrome(s). You can proceed to triage.
+          </p>
+        </div>
+
+        <div className="w-full flex items-center justify-between pt-2 sm:static fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-gray-100 sm:border-0 sm:p-0 sm:bg-transparent z-40">
+          <button
+            type="button"
+            onClick={handleSaveDraft}
+            className="rounded-[12px] bg-[#f2f3f5] hover:bg-[#e4e8ec] text-[#0073f3] px-6 py-3.5 text-sm sm:text-base font-medium transition-colors cursor-pointer"
+          >
+            Save as draft
+          </button>
+          <button
+            type="button"
+            onClick={() => onComplete(`qs_${syndromeIds.join("_")}`, {})}
+            className="rounded-[12px] bg-[#0073f3] hover:bg-[#0060cb] text-white px-8 py-3.5 text-sm sm:text-base font-medium transition-colors cursor-pointer shadow-sm"
+          >
+            Continue
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full flex flex-col gap-5 pb-24 sm:pb-0">
-      {/* Patient Bar (Figma 0:3639, 0:3684, 0:3331, 0:3504) */}
+      {/* Patient Bar */}
       <div className="bg-[#f9f9f9] rounded-[16px] px-5 py-4 flex items-center justify-between">
         <div className="flex flex-col gap-0.5">
           <span className="font-medium text-base text-[#242b33]">
@@ -117,11 +174,7 @@ export function StepQuestions({
           </span>
           <span className="text-sm text-[#6e8298]">
             {isAnonymous
-              ? new Date().toLocaleDateString("en-GB", {
-                  day: "numeric",
-                  month: "long",
-                  year: "numeric",
-                })
+              ? new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
               : `Created ${patientCreatedAt}`}
           </span>
         </div>
@@ -130,85 +183,105 @@ export function StepQuestions({
         </div>
       </div>
 
-      {/* Main Question Card Stack */}
-      <div className="relative w-full">
-        {/* Background peeking card */}
-        <div className="absolute inset-x-4 -bottom-3 h-12 bg-[#f2f3f5] rounded-[20px] -z-10" />
-
-        <div className="bg-[#f9f9f9] rounded-[20px] p-6 sm:p-10 flex flex-col gap-6">
-          {/* Eyebrow and Question Title */}
-          <div className="flex flex-col gap-2">
-            <span className="text-[#0590f9] text-xs font-semibold uppercase tracking-wider">
-              Follow up {currentIndex + 1}/{totalQuestions}
-            </span>
-            <h2 className="text-xl sm:text-2xl font-normal text-[#001f3e] leading-snug">
-              {currentQuestion.prompt_en}
-            </h2>
-          </div>
-
-          {/* Hausa Audio Prompt Card */}
-          <div className="bg-[#f0f7ff] border border-[#aad0fb] rounded-[20px] p-4 sm:p-5 flex items-center gap-4">
-            <button
-              type="button"
-              onClick={handlePlayAudio}
-              className="size-11 rounded-full bg-white text-[#0073f3] hover:bg-blue-50/70 flex items-center justify-center shrink-0 shadow-sm transition-colors cursor-pointer"
-              aria-label="Play Hausa audio prompt"
-            >
-              {isPlayingAudio ? (
-                <VolumeX className="size-5 text-[#0073f3] animate-pulse" />
-              ) : (
-                <Volume2 className="size-5 text-[#0073f3]" />
-              )}
-            </button>
-            <p className="font-medium text-sm sm:text-base text-[#0051a8] leading-relaxed">
-              {currentQuestion.prompt_ha}
-            </p>
-          </div>
-
-          {/* Options (Yes / No) */}
-          <div className="flex flex-col gap-3">
-            {currentQuestion.options.map((opt) => {
-              const isSelected = currentAnswer === opt.value;
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => handleSelectOption(opt.value)}
-                  className={cn(
-                    "bg-white rounded-[16px] p-4 sm:p-5 flex items-center justify-between cursor-pointer transition-all text-left",
-                    isSelected
-                      ? "ring-2 ring-[#0073f3] bg-[#f8fbff]"
-                      : "hover:bg-gray-50/80"
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "font-medium text-base",
-                      isSelected ? "text-[#0073f3]" : "text-[#242b33]"
-                    )}
-                  >
-                    {opt.label_en}
-                  </span>
-                  <div
-                    className={cn(
-                      "size-6 rounded-full flex items-center justify-center transition-colors shrink-0",
-                      isSelected
-                        ? "border-2 border-[#0073f3]"
-                        : "border-2 border-[#c7d2de]"
-                    )}
-                  >
-                    {isSelected && (
-                      <div className="size-3 rounded-full bg-[#0073f3]" />
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+      {/* Progress indicator */}
+      <div className="flex items-center justify-between px-1">
+        <span className="text-xs text-[#6e8298] font-medium uppercase tracking-wider">
+          Follow-up questions
+        </span>
+        <span className="text-xs font-semibold text-[#0073f3]">
+          {answeredCount}/{totalQuestions} answered
+        </span>
       </div>
 
-      {/* Bottom Actions Bar - fixed to bottom on mobile */}
+      {/* Progress bar */}
+      <div className="w-full h-1.5 bg-[#e8edf2] rounded-full overflow-hidden -mt-3">
+        <div
+          className="h-full bg-[#0073f3] rounded-full transition-all duration-300"
+          style={{ width: totalQuestions > 0 ? `${(answeredCount / totalQuestions) * 100}%` : "0%" }}
+        />
+      </div>
+
+      {/* All questions stacked on one page */}
+      <div className="flex flex-col gap-4">
+        {allQuestions.map((question, idx) => {
+          const currentAnswer = answers[question.code];
+          const isPlaying = playingCode === question.code;
+
+          return (
+            <div key={question.code} className="relative w-full">
+              <div className="bg-[#f9f9f9] rounded-[20px] p-5 sm:p-7 flex flex-col gap-4">
+                {/* Question header */}
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[#0590f9] text-xs font-semibold uppercase tracking-wider">
+                    Question {idx + 1}
+                    {syndromeLabels[syndromeIds.indexOf(question.syndromeId)]
+                      ? ` · ${syndromeLabels[syndromeIds.indexOf(question.syndromeId)]}`
+                      : ""}
+                  </span>
+                  <h3 className="text-base sm:text-lg font-normal text-[#001f3e] leading-snug">
+                    {question.prompt_en}
+                  </h3>
+                </div>
+
+                {/* Hausa audio prompt */}
+                <div className="bg-[#f0f7ff] border border-[#aad0fb] rounded-[16px] p-3.5 flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handlePlayAudio(question)}
+                    className="size-9 rounded-full bg-white text-[#0073f3] hover:bg-blue-50/70 flex items-center justify-center shrink-0 shadow-sm transition-colors cursor-pointer"
+                    aria-label="Play Hausa audio prompt"
+                  >
+                    {isPlaying ? (
+                      <VolumeX className="size-4 text-[#0073f3] animate-pulse" />
+                    ) : (
+                      <Volume2 className="size-4 text-[#0073f3]" />
+                    )}
+                  </button>
+                  <p className="font-medium text-sm text-[#0051a8] leading-relaxed">
+                    {question.prompt_ha}
+                  </p>
+                </div>
+
+                {/* Inline Yes / No options */}
+                <div className="flex flex-row gap-3">
+                  {question.options.map((opt) => {
+                    const isSelected = currentAnswer === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => handleSelectOption(question.code, opt.value)}
+                        className={cn(
+                          "flex-1 rounded-[14px] py-3.5 flex items-center justify-center gap-2 cursor-pointer transition-all font-medium text-sm sm:text-base",
+                          isSelected
+                            ? "bg-[#0073f3] text-white shadow-sm"
+                            : "bg-white text-[#242b33] hover:bg-gray-50/80 border border-[#e4e8ec]"
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            "size-5 rounded-full flex items-center justify-center border-2 shrink-0",
+                            isSelected
+                              ? "border-white"
+                              : "border-[#c7d2de]"
+                          )}
+                        >
+                          {isSelected && (
+                            <div className="size-2.5 rounded-full bg-white" />
+                          )}
+                        </div>
+                        {opt.label_en}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Bottom Actions Bar */}
       <div className="w-full flex items-center justify-between pt-2 sm:static fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-gray-100 sm:border-0 sm:p-0 sm:bg-transparent z-40">
         <button
           type="button"
@@ -219,11 +292,11 @@ export function StepQuestions({
         </button>
         <button
           type="button"
-          disabled={!currentAnswer}
-          onClick={handleNext}
+          disabled={!allAnswered}
+          onClick={handleSubmit}
           className="rounded-[12px] bg-[#0073f3] hover:bg-[#0060cb] text-white px-8 py-3.5 text-sm sm:text-base font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
         >
-          Next
+          Continue to triage
         </button>
       </div>
     </div>

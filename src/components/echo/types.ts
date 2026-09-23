@@ -20,6 +20,10 @@ export interface EchoEncounterState {
   locale?: "en" | "ha";
   sessionCode: string | null;
   consentId: string | null;
+  /** Multi-syndrome: list of selected syndrome codes/IDs */
+  syndromeIds: string[];
+  syndromeLabels: string[];
+  /** Legacy single-value shims (derived from syndromeIds[0]) */
   syndromeId: string | null;
   syndromeLabel: string | null;
   questionSetId: string | null;
@@ -41,6 +45,8 @@ export const INITIAL_ECHO_STATE: EchoEncounterState = {
   patientId: null,
   sessionCode: null,
   consentId: null,
+  syndromeIds: [],
+  syndromeLabels: [],
   syndromeId: null,
   syndromeLabel: null,
   questionSetId: null,

@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { format } from "date-fns";
-import { ArrowLeft, ChevronDown, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, Plus, Trash2, ClipboardList, Pill } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePatient } from "@/lib/queries/patients";
 import { usePatientEncounters } from "@/lib/queries/encounters";
@@ -29,10 +29,16 @@ export default function PatientProfilePage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // Filter patient encounters based on tab filter status
+  const filteredEncounters = useMemo(() => {
+    if (filterStatus === "all") return encounters;
+    return encounters.filter((e) => e.status === filterStatus);
+  }, [encounters, filterStatus]);
+
   // Format patient name parts
   const { firstName, lastName, middleName } = useMemo(() => {
     if (!patient?.full_name) {
-      return { firstName: "Rukayya", lastName: "Jibrin", middleName: "-" };
+      return { firstName: "-", lastName: "", middleName: "-" };
     }
     const parts = patient.full_name.trim().split(/\s+/);
     if (parts.length === 1) return { firstName: parts[0], lastName: "", middleName: "-" };
@@ -41,21 +47,21 @@ export default function PatientProfilePage() {
   }, [patient?.full_name]);
 
   const createdDateFormatted = useMemo(() => {
-    if (!patient?.created_at) return "November 4, 2024";
+    if (!patient?.created_at) return "-";
     try {
       return format(new Date(patient.created_at), "MMMM d, yyyy");
     } catch {
-      return "November 4, 2024";
+      return "-";
     }
   }, [patient?.created_at]);
 
   const ageDisplay = useMemo(() => {
-    if (!patient?.age_band) return "42 years old";
+    if (!patient?.age_band) return "-";
     return patient.age_band.replace(/_/g, " ").replace("plus", "+");
   }, [patient?.age_band]);
 
   const genderDisplay = useMemo(() => {
-    if (!patient?.sex) return "Female";
+    if (!patient?.sex) return "-";
     return patient.sex.charAt(0).toUpperCase() + patient.sex.slice(1);
   }, [patient?.sex]);
 
@@ -366,62 +372,49 @@ export default function PatientProfilePage() {
             </Link>
           </div>
 
-          {/* Encounter List Groups */}
-          <div className="flex flex-col gap-6">
-            {/* This month group */}
-            <div className="flex flex-col gap-3">
-              <h3 className="text-[15px] font-normal text-[#6e8298]">This month</h3>
+          {/* Encounter List */}
+          {filteredEncounters.length === 0 ? (
+            <div className="bg-[#fafafa] rounded-[24px] p-8 text-center flex flex-col items-center gap-3">
+              <div className="size-12 rounded-full bg-[#f0f7ff] text-[#0073f3] flex items-center justify-center">
+                <ClipboardList className="size-6" />
+              </div>
+              <p className="text-[16px] font-medium text-[#242b33]">No encounters recorded</p>
+              <p className="text-[14px] text-[#6e8298] max-w-sm">
+                There are no clinical documentation or surveillance encounters recorded for this patient.
+              </p>
+              <Link
+                href={`/encounters/reach/new?patientId=${patient.id}`}
+                className="mt-2 bg-[#0073f3] hover:bg-[#0062d1] text-white rounded-[12px] px-5 py-2.5 text-[14px] font-medium transition-colors"
+              >
+                Start encounter
+              </Link>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-6">
               <div className="bg-[#fafafa] rounded-[24px] p-5 flex flex-col gap-4">
-                <EncounterRow
-                  month="AUG"
-                  day="10"
-                  title="Rabies Vaccination Encounter"
-                  onClick={() => router.push("/encounters")}
-                />
-                <div className="w-full h-px bg-[#f2f3f5]" />
-                <EncounterRow
-                  month="AUG"
-                  day="08"
-                  title="Malaria Consultation"
-                  onClick={() => router.push("/encounters")}
-                />
-                <div className="w-full h-px bg-[#f2f3f5]" />
-                <EncounterRow
-                  month="AUG"
-                  day="24"
-                  title="Malaria Consultation"
-                  onClick={() => router.push("/encounters")}
-                />
+                {filteredEncounters.map((e, idx) => {
+                  const d = e.started_at ? new Date(e.started_at) : new Date();
+                  const month = format(d, "MMM").toUpperCase();
+                  const day = format(d, "dd");
+                  const title =
+                    e.workflow_mode === "echo"
+                      ? `ECHO Surveillance Encounter (${e.encounter_code || "ECHO"})`
+                      : `Clinical Encounter (${e.encounter_code || "REACH"})`;
+                  return (
+                    <div key={e.id}>
+                      {idx > 0 && <div className="w-full h-px bg-[#f2f3f5] mb-4" />}
+                      <EncounterRow
+                        month={month}
+                        day={day}
+                        title={title}
+                        onClick={() => router.push(`/encounters/${e.id}`)}
+                      />
+                    </div>
+                  );
+                })}
               </div>
             </div>
-
-            {/* Earlier group */}
-            <div className="flex flex-col gap-3">
-              <h3 className="text-[15px] font-normal text-[#6e8298]">Earlier</h3>
-              <div className="bg-[#fafafa] rounded-[24px] p-5 flex flex-col gap-4">
-                <EncounterRow
-                  month="AUG"
-                  day="10"
-                  title="Rabies Vaccination Encounter"
-                  onClick={() => router.push("/encounters")}
-                />
-                <div className="w-full h-px bg-[#f2f3f5]" />
-                <EncounterRow
-                  month="AUG"
-                  day="08"
-                  title="Malaria Consultation"
-                  onClick={() => router.push("/encounters")}
-                />
-                <div className="w-full h-px bg-[#f2f3f5]" />
-                <EncounterRow
-                  month="AUG"
-                  day="24"
-                  title="Malaria Consultation"
-                  onClick={() => router.push("/encounters")}
-                />
-              </div>
-            </div>
-          </div>
+          )}
         </div>
       )}
 
@@ -447,49 +440,15 @@ export default function PatientProfilePage() {
             </div>
           </div>
 
-          {/* Prescriptions List (Figma 6458:6489) */}
-          <div className="flex flex-col gap-6">
-            <div className="flex flex-col gap-3">
-              <h3 className="text-[15px] font-normal text-[#6e8298]">This month</h3>
-              <div className="bg-[#fafafa] rounded-[24px] p-5 flex flex-col gap-4">
-                <PrescriptionCard
-                  name="Paracetamol 500mg"
-                  route="Oral"
-                  indication="For fever and pain relief"
-                  dosage="1-2 tablets every 4-6 hours as needed"
-                  duration="For 5 days"
-                />
-                <div className="w-full h-px bg-[#f2f3f5]" />
-                <PrescriptionCard
-                  name="Paracetamol 500mg"
-                  route="Oral"
-                  indication="For fever and pain relief"
-                  dosage="1-2 tablets every 4-6 hours as needed"
-                  duration="For 5 days"
-                />
-              </div>
+          {/* Prescriptions List - Empty State */}
+          <div className="bg-[#fafafa] rounded-[24px] p-8 text-center flex flex-col items-center gap-3">
+            <div className="size-12 rounded-full bg-[#f2f3f5] text-[#6e8298] flex items-center justify-center">
+              <Pill className="size-6" />
             </div>
-
-            <div className="flex flex-col gap-3">
-              <h3 className="text-[15px] font-normal text-[#6e8298]">This month</h3>
-              <div className="bg-[#fafafa] rounded-[24px] p-5 flex flex-col gap-4">
-                <PrescriptionCard
-                  name="Paracetamol 500mg"
-                  route="Oral"
-                  indication="For fever and pain relief"
-                  dosage="1-2 tablets every 4-6 hours as needed"
-                  duration="For 5 days"
-                />
-                <div className="w-full h-px bg-[#f2f3f5]" />
-                <PrescriptionCard
-                  name="Paracetamol 500mg"
-                  route="Oral"
-                  indication="For fever and pain relief"
-                  dosage="1-2 tablets every 4-6 hours as needed"
-                  duration="For 5 days"
-                />
-              </div>
-            </div>
+            <p className="text-[16px] font-medium text-[#242b33]">No active prescriptions</p>
+            <p className="text-[14px] text-[#6e8298] max-w-sm">
+              Medications prescribed during completed clinical encounters will appear here.
+            </p>
           </div>
         </div>
       )}

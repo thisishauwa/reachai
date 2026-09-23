@@ -6,9 +6,11 @@ import { syncController } from "@/lib/offline/sync";
 import { createIdempotencyKey } from "@/lib/logic/idempotency";
 import { TriageBottomSheet } from "@/components/echo/triage-bottom-sheet";
 import { Skeleton } from "@/components/ui/skeleton";
+import { evaluateMultiSyndromeTriage } from "@/lib/logic/triage";
 import type {
   TriageOutcomeRow,
   TriageSeverity,
+  Json,
 } from "@/lib/supabase/database.types";
 
 function isUuid(val: unknown): boolean {
@@ -18,13 +20,16 @@ function isUuid(val: unknown): boolean {
 
 export function StepTriage({
   encounterId,
-  syndromeId,
+  syndromeIds,
   questionSetId,
+  answers = {},
   onDone,
 }: {
   encounterId: string;
-  syndromeId: string;
+  /** Multi-syndrome: array of syndrome codes/IDs to evaluate */
+  syndromeIds: string[];
   questionSetId: string;
+  answers?: Record<string, unknown>;
   onDone: (outcome: {
     id: string;
     severity: TriageSeverity;
@@ -33,6 +38,8 @@ export function StepTriage({
     ipcGuidanceEn: string | null;
   }) => void;
 }) {
+  // Derive primary syndromeId (first) for legacy DB lookups
+  const syndromeId = syndromeIds[0] ?? "OTHER";
   const [loading, setLoading] = useState(true);
   const [outcome, setOutcome] = useState<TriageOutcomeRow | null>(null);
 
@@ -111,125 +118,79 @@ export function StepTriage({
         }
       }
 
-      // 5. Evaluate triage via Supabase RPC
-      const { data, error } = await supabase.rpc("evaluate_triage", {
-        p_encounter_id: encounterId,
-        p_idempotency_key: createIdempotencyKey(),
-      });
+      // 5. Evaluate clinical assessment from answers across all selected syndromes
+      const clinical = evaluateMultiSyndromeTriage(syndromeIds, answers || {});
 
-      if (error || !data) {
-        console.warn("evaluate_triage rpc note:", error);
-        // Realistic default outcome based on syndrome for offline/demo
-        const isEmergency =
-          syndromeId.toUpperCase().includes("DIARRHOEA") ||
-          syndromeId.toUpperCase().includes("BLEEDING");
-        const fallbackOutcome = {
-          id: crypto.randomUUID(),
-          encounter_id: encounterId,
-          severity: (isEmergency ? "emergency" : "urgent") as TriageSeverity,
-          condition_code: isEmergency ? "AWD_CHOLERA" : "MALARIA",
-          condition_label_en: isEmergency ? "Suspected Cholera" : "Severe Malaria",
-          condition_label_ha: isEmergency ? "Zaton Kwalara" : "Zazzabin Cizon Sauro Mai Tsanani",
-          guidance_en: isEmergency
-            ? "Immediate isolation required. Begin oral rehydration therapy immediately. Refer to nearest secondary health facility."
-            : "Administer pre-referral artesunate suppository or IM artesunate. Refer immediately.",
-          guidance_ha: isEmergency
-            ? "Ana bukatar killace majiyyaci nan take. Fara ba da ruwan gishiri da sukari (ORS) nan da nan."
-            : "A ba da maganin zazzabin cizon sauro na gaggawa. A tura asibiti nan take.",
-          ipc_guidance_en: isEmergency
-            ? "Use gloves, gown, and strict hand hygiene. Disinfect all surfaces with 0.5% chlorine solution."
-            : null,
-          ipc_guidance_ha: null,
-          referral_required: true,
-          evaluated_inputs: {},
-          ruleset_snapshot: [],
-          evaluated_at: new Date().toISOString(),
-          acknowledged_at: null,
-          acknowledged_by: null,
-          override_reason: null,
-          triage_rule_id: null,
-        };
-
-        try {
-          await supabase.from("triage_outcomes").upsert(
-            {
-              id: fallbackOutcome.id,
-              encounter_id: encounterId,
-              severity: fallbackOutcome.severity,
-              condition_code: fallbackOutcome.condition_code,
-              condition_label_en: fallbackOutcome.condition_label_en,
-              condition_label_ha: fallbackOutcome.condition_label_ha,
-              guidance_en: fallbackOutcome.guidance_en,
-              guidance_ha: fallbackOutcome.guidance_ha,
-              ipc_guidance_en: fallbackOutcome.ipc_guidance_en,
-              referral_required: true,
-              evaluated_inputs: {},
-              ruleset_snapshot: [],
-            },
-            { onConflict: "encounter_id" }
-          );
-        } catch (dbErr) {
-          console.warn("Direct triage_outcomes save note:", dbErr);
+      // Call Supabase RPC to record triage outcome in the database
+      let rpcOutcomeId: string | null = null;
+      try {
+        const { data, error } = await supabase.rpc("evaluate_triage", {
+          p_encounter_id: encounterId,
+          p_idempotency_key: createIdempotencyKey(),
+        });
+        if (!error && data) {
+          rpcOutcomeId = (data as { id?: string })?.id || null;
+        } else if (error) {
+          console.warn("evaluate_triage rpc note:", error);
         }
-
-        setOutcome(fallbackOutcome as unknown as TriageOutcomeRow);
-        return;
+      } catch (rpcErr) {
+        console.warn("evaluate_triage exception note:", rpcErr);
       }
 
-      setOutcome(data as unknown as TriageOutcomeRow);
-    } catch (err: unknown) {
-      console.warn("Triage evaluation exception:", err);
-      const isEmergency =
-        syndromeId.toUpperCase().includes("DIARRHOEA") ||
-        syndromeId.toUpperCase().includes("BLEEDING");
-      const fallbackOutcome = {
-        id: crypto.randomUUID(),
+      const outcomeId = rpcOutcomeId || crypto.randomUUID();
+      const resolvedOutcome: TriageOutcomeRow = {
+        id: outcomeId,
         encounter_id: encounterId,
-        severity: (isEmergency ? "emergency" : "urgent") as TriageSeverity,
-        condition_code: isEmergency ? "AWD_CHOLERA" : "MALARIA",
-        condition_label_en: isEmergency ? "Suspected Cholera" : "Severe Malaria",
-        condition_label_ha: null,
-        guidance_en:
-          "Immediate isolation required. Begin oral rehydration therapy immediately. Refer to nearest secondary health facility.",
-        guidance_ha: null,
-        ipc_guidance_en:
-          "Use gloves, gown, and strict hand hygiene. Disinfect all surfaces with 0.5% chlorine solution.",
-        ipc_guidance_ha: null,
-        referral_required: true,
-        evaluated_inputs: {},
+        severity: clinical.severity,
+        condition_code: clinical.conditionCode,
+        condition_label_en: clinical.conditionLabelEn,
+        condition_label_ha: clinical.conditionLabelHa,
+        guidance_en: clinical.guidanceEn,
+        guidance_ha: clinical.guidanceHa,
+        ipc_guidance_en: clinical.ipcGuidanceEn,
+        ipc_guidance_ha: clinical.ipcGuidanceHa,
+        referral_required: clinical.referralRequired,
+        evaluated_inputs: (answers || {}) as unknown as Json,
         ruleset_snapshot: [],
         evaluated_at: new Date().toISOString(),
-        acknowledged_at: null,
+        acknowledged_at: clinical.severity === "emergency" ? new Date().toISOString() : null,
         acknowledged_by: null,
         override_reason: null,
         triage_rule_id: null,
       };
 
-      try {
-        await supabase.from("triage_outcomes").upsert(
-          {
-            id: fallbackOutcome.id,
-            encounter_id: encounterId,
-            severity: fallbackOutcome.severity,
-            condition_code: fallbackOutcome.condition_code,
-            condition_label_en: fallbackOutcome.condition_label_en,
-            guidance_en: fallbackOutcome.guidance_en,
-            ipc_guidance_en: fallbackOutcome.ipc_guidance_en,
-            referral_required: true,
-            evaluated_inputs: {},
-            ruleset_snapshot: [],
-          },
-          { onConflict: "encounter_id" }
-        );
-      } catch (dbErr) {
-        console.warn("Direct triage_outcomes save note on catch:", dbErr);
-      }
+      setOutcome(resolvedOutcome);
+    } catch (err: unknown) {
+      console.warn("Triage evaluation exception:", err);
+      const clinical = evaluateMultiSyndromeTriage(syndromeIds, answers || {});
+      const fallbackOutcome: TriageOutcomeRow = {
+        id: crypto.randomUUID(),
+        encounter_id: encounterId,
+        severity: clinical.severity,
+        condition_code: clinical.conditionCode,
+        condition_label_en: clinical.conditionLabelEn,
+        condition_label_ha: clinical.conditionLabelHa,
+        guidance_en: clinical.guidanceEn,
+        guidance_ha: clinical.guidanceHa,
+        ipc_guidance_en: clinical.ipcGuidanceEn,
+        ipc_guidance_ha: clinical.ipcGuidanceHa,
+        referral_required: clinical.referralRequired,
+        evaluated_inputs: (answers || {}) as unknown as Json,
+        ruleset_snapshot: [],
+        evaluated_at: new Date().toISOString(),
+        acknowledged_at: clinical.severity === "emergency" ? new Date().toISOString() : null,
+        acknowledged_by: null,
+        override_reason: null,
+        triage_rule_id: null,
+      };
 
-      setOutcome(fallbackOutcome as unknown as TriageOutcomeRow);
+      setOutcome(fallbackOutcome);
+
     } finally {
       setLoading(false);
     }
-  }, [encounterId, syndromeId, questionSetId]);
+  }, [encounterId, syndromeIds, syndromeId, questionSetId, answers]);
+
 
   useEffect(() => {
     void runEvaluation();

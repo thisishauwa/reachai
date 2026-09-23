@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { selectTriageOutcome, type TriageRuleLike } from "../triage";
+import { selectTriageOutcome, evaluateClinicalTriage, type TriageRuleLike } from "../triage";
 
 const emergencyCholera: TriageRuleLike = {
   id: "rule-emergency",
@@ -46,3 +46,53 @@ describe("selectTriageOutcome", () => {
     expect(outcome?.id).toBe("high");
   });
 });
+
+describe("evaluateClinicalTriage", () => {
+  it("triggers emergency referral when AWD symptoms are yes and yes (dire dehydration)", () => {
+    const outcome = evaluateClinicalTriage("ACUTE_WATERY_DIARRHOEA", {
+      AWD_DEHYDRATION: "yes",
+      AWD_EPISODES: "yes",
+    });
+    expect(outcome.referralRequired).toBe(true);
+    expect(outcome.severity).toBe("emergency");
+    expect(outcome.conditionCode).toBe("AWD_CHOLERA_SEVERE");
+    expect(outcome.ipcGuidanceEn).not.toBeNull();
+  });
+
+  it("triggers urgent referral when at least one AWD symptom is yes", () => {
+    const outcome = evaluateClinicalTriage("ACUTE_WATERY_DIARRHOEA", {
+      AWD_DEHYDRATION: "yes",
+      AWD_EPISODES: "no",
+    });
+    expect(outcome.referralRequired).toBe(true);
+    expect(outcome.severity).toBe("urgent");
+  });
+
+  it("does NOT trigger referral when all symptoms are no (routine)", () => {
+    const outcome = evaluateClinicalTriage("ACUTE_WATERY_DIARRHOEA", {
+      AWD_DEHYDRATION: "no",
+      AWD_EPISODES: "no",
+    });
+    expect(outcome.referralRequired).toBe(false);
+    expect(outcome.severity).toBe("routine");
+  });
+
+  it("triggers emergency referral for fever with spontaneous bleeding", () => {
+    const outcome = evaluateClinicalTriage("FEVER_BLEEDING", {
+      FB_SPONTANEOUS_BLEEDING: "yes",
+    });
+    expect(outcome.referralRequired).toBe(true);
+    expect(outcome.severity).toBe("emergency");
+    expect(outcome.ipcGuidanceEn).toContain("FULL PPE REQUIRED");
+  });
+
+  it("triggers urgent referral when two generic affirmative answers are present", () => {
+    const outcome = evaluateClinicalTriage("OTHER_PRIORITY", {
+      OP_DURATION: "yes",
+      OP_SEVERE_PAIN: "yes",
+    });
+    expect(outcome.referralRequired).toBe(true);
+    expect(outcome.severity).toBe("urgent");
+  });
+});
+

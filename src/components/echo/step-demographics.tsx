@@ -5,6 +5,7 @@ import { Smile, Check, ChevronDown, UserCheck } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { AGE_BANDS, OCCUPATION_TYPES } from "@/lib/reference/demographics";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { usePatients } from "@/lib/queries/patients";
 import { useSession } from "@/lib/session/session-context";
 import type { PrivacyMode } from "@/lib/supabase/database.types";
@@ -286,21 +287,13 @@ export function StepDemographics({
                 <label className="text-sm font-medium text-[#242b33]">
                   Occupation type
                 </label>
-                <div className="relative">
-                  <select
-                    value={occupationType}
-                    onChange={(e) => setOccupationType(e.target.value)}
-                    className="w-full appearance-none bg-white rounded-[12px] px-4 py-3.5 text-sm sm:text-base text-[#242b33] outline-none focus:ring-2 focus:ring-[#0073f3] transition-all pr-10"
-                  >
-                    <option value="">Select an option</option>
-                    {OCCUPATION_TYPES.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 size-5 text-[#6e8298] pointer-events-none" />
-                </div>
+                <SearchableSelect
+                  options={OCCUPATION_TYPES}
+                  value={occupationType}
+                  onChange={setOccupationType}
+                  placeholder="Select an occupation"
+                  searchPlaceholder="Search occupation (e.g. Farmer, Trader)..."
+                />
               </div>
             </div>
           ) : (
@@ -329,71 +322,88 @@ export function StepDemographics({
                 </div>
               </div>
 
-              {/* Sex */}
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="sex-select" className="text-sm font-medium text-[#242b33]">
+              {/* Sex (Segmented Radio Group) */}
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-[#242b33]">
                   Sex
                 </label>
-                <div className="relative">
-                  <select
-                    id="sex-select"
-                    value={sex}
-                    onChange={(e) => setSex(e.target.value)}
-                    className="w-full appearance-none bg-white rounded-[12px] px-4 py-3.5 text-sm sm:text-base text-[#242b33] outline-none focus:ring-2 focus:ring-[#0073f3] transition-all pr-10 cursor-pointer"
-                  >
-                    <option value="">Select an option</option>
-                    <option value="female">Female</option>
-                    <option value="male">Male</option>
-                  </select>
-                  <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 size-5 text-[#6e8298] pointer-events-none" />
+                <div className="grid grid-cols-2 gap-2.5">
+                  {[
+                    { value: "female", label: "Female" },
+                    { value: "male", label: "Male" },
+                  ].map((opt) => {
+                    const isSelected = sex === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setSex(opt.value)}
+                        className={cn(
+                          "h-[48px] rounded-[12px] px-4 font-medium text-sm sm:text-base flex items-center justify-center gap-2.5 border transition-all cursor-pointer",
+                          isSelected
+                            ? "bg-[#0073f3] text-white border-[#0073f3] shadow-sm"
+                            : "bg-white text-[#242b33] border-[#e4e8ec] hover:bg-[#fafafa]"
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "size-2 rounded-full",
+                            isSelected ? "bg-white" : "bg-[#c2cdd8]"
+                          )}
+                        />
+                        {opt.label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Pregnancy Status (0:1905 - conditionally rendered when sex === 'female') */}
+              {/* Pregnancy Status (Segmented Radio Group - conditionally rendered when sex === 'female') */}
               {sex === "female" && (
-                <div className="flex flex-col gap-1.5 transition-all">
-                  <label htmlFor="pregnancy-status-select" className="text-sm font-medium text-[#242b33]">
+                <div className="flex flex-col gap-2 transition-all">
+                  <label className="text-sm font-medium text-[#242b33]">
                     Pregnancy status
                   </label>
-                  <div className="relative">
-                    <select
-                      id="pregnancy-status-select"
-                      value={pregnancyStatus}
-                      onChange={(e) => setPregnancyStatus(e.target.value)}
-                      className="w-full appearance-none bg-white rounded-[12px] px-4 py-3.5 text-sm sm:text-base text-[#242b33] outline-none focus:ring-2 focus:ring-[#0073f3] transition-all pr-10 cursor-pointer"
-                    >
-                      <option value="">Select an option</option>
-                      <option value="not_pregnant">Not pregnant</option>
-                      <option value="pregnant">Pregnant</option>
-                      <option value="postpartum">Postpartum</option>
-                      <option value="unknown">Unknown</option>
-                    </select>
-                    <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 size-5 text-[#6e8298] pointer-events-none" />
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {[
+                      { value: "not_pregnant", label: "Not pregnant" },
+                      { value: "pregnant", label: "Pregnant" },
+                      { value: "postpartum", label: "Postpartum" },
+                      { value: "unknown", label: "Unknown" },
+                    ].map((opt) => {
+                      const isSelected = pregnancyStatus === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => setPregnancyStatus(opt.value)}
+                          className={cn(
+                            "h-[44px] rounded-[12px] px-2.5 font-medium text-xs sm:text-sm flex items-center justify-center border transition-all cursor-pointer text-center",
+                            isSelected
+                              ? "bg-[#0073f3] text-white border-[#0073f3] shadow-sm"
+                              : "bg-white text-[#242b33] border-[#e4e8ec] hover:bg-[#fafafa]"
+                          )}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
 
-              {/* Occupation Type */}
+              {/* Occupation Type (Searchable) */}
               <div className="flex flex-col gap-1.5">
-                <label htmlFor="occupation-select" className="text-sm font-medium text-[#242b33]">
+                <label className="text-sm font-medium text-[#242b33]">
                   Occupation type
                 </label>
-                <div className="relative">
-                  <select
-                    id="occupation-select"
-                    value={occupationType}
-                    onChange={(e) => setOccupationType(e.target.value)}
-                    className="w-full appearance-none bg-white rounded-[12px] px-4 py-3.5 text-sm sm:text-base text-[#242b33] outline-none focus:ring-2 focus:ring-[#0073f3] transition-all pr-10 cursor-pointer"
-                  >
-                    <option value="">Select an option</option>
-                    {OCCUPATION_TYPES.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 size-5 text-[#6e8298] pointer-events-none" />
-                </div>
+                <SearchableSelect
+                  options={OCCUPATION_TYPES}
+                  value={occupationType}
+                  onChange={setOccupationType}
+                  placeholder="Select an occupation"
+                  searchPlaceholder="Search occupation (e.g. Farmer, Trader)..."
+                />
               </div>
 
               {/* Policy Consent Checkbox */}

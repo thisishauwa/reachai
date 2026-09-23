@@ -15,7 +15,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
 import { AGE_BANDS, OCCUPATION_TYPES, PREGNANCY_RELEVANT_AGE_BANDS } from "@/lib/reference/demographics";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { generateSessionCode } from "@/lib/reference/codes";
 
@@ -49,6 +51,7 @@ export function StepAnonymousSetup({
   });
   const sex = watch("sex");
   const ageBand = watch("age_band");
+  const occupationType = watch("occupation_type");
   const showPregnancy = sex === "female" && PREGNANCY_RELEVANT_AGE_BANDS.includes(ageBand);
 
   async function onSubmit(values: AnonymousDemographicsValues) {
@@ -131,16 +134,40 @@ export function StepAnonymousSetup({
         </Select>
         {errors.age_band && <p className="text-xs text-destructive">{errors.age_band.message}</p>}
 
-        <Select onValueChange={(v) => setValue("sex", v as AnonymousDemographicsValues["sex"])}>
-          <SelectTrigger className="w-full"><SelectValue placeholder="Sex" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="female">Female</SelectItem>
-            <SelectItem value="male">Male</SelectItem>
-            <SelectItem value="intersex">Intersex</SelectItem>
-            <SelectItem value="unknown">Unknown</SelectItem>
-          </SelectContent>
-        </Select>
-        {errors.sex && <p className="text-xs text-destructive">{errors.sex.message}</p>}
+        {/* Sex Radio Group */}
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs text-muted-foreground font-normal">Sex</Label>
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { value: "female", label: "Female" },
+              { value: "male", label: "Male" },
+            ].map((opt) => {
+              const isSelected = sex === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setValue("sex", opt.value as AnonymousDemographicsValues["sex"], { shouldValidate: true })}
+                  className={cn(
+                    "h-10 rounded-md px-3 font-medium text-sm flex items-center justify-center gap-2 border transition-all cursor-pointer",
+                    isSelected
+                      ? "bg-[#0073f3] text-white border-[#0073f3] shadow-sm"
+                      : "bg-white text-[#242b33] border-input hover:bg-accent"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "size-1.5 rounded-full",
+                      isSelected ? "bg-white" : "bg-muted-foreground/50"
+                    )}
+                  />
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+          {errors.sex && <p className="text-xs text-destructive">{errors.sex.message}</p>}
+        </div>
 
         {showPregnancy && (
           <Select onValueChange={(v) => setValue("pregnancy_status", v as AnonymousDemographicsValues["pregnancy_status"])}>
@@ -153,13 +180,18 @@ export function StepAnonymousSetup({
           </Select>
         )}
 
-        <Select onValueChange={(v) => setValue("occupation_type", v as AnonymousDemographicsValues["occupation_type"])}>
-          <SelectTrigger className="w-full"><SelectValue placeholder="Occupation" /></SelectTrigger>
-          <SelectContent>
-            {OCCUPATION_TYPES.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        {errors.occupation_type && <p className="text-xs text-destructive">{errors.occupation_type.message}</p>}
+        {/* Occupation Searchable Select */}
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs text-muted-foreground font-normal">Occupation</Label>
+          <SearchableSelect
+            options={OCCUPATION_TYPES}
+            value={occupationType ?? ""}
+            onChange={(v) => setValue("occupation_type", v as AnonymousDemographicsValues["occupation_type"], { shouldValidate: true })}
+            placeholder="Select occupation"
+            searchPlaceholder="Search occupation..."
+          />
+          {errors.occupation_type && <p className="text-xs text-destructive">{errors.occupation_type.message}</p>}
+        </div>
 
         <Button type="submit" disabled={submitting || !attested}>
           {submitting ? "Saving\u2026" : "Continue"}

@@ -164,7 +164,11 @@ export default function NewReachEncounterPage() {
       <EncounterHeader
         onBack={() => {
           if (state.step === "history") {
-            setState((s) => ({ ...s, step: "patient" }));
+            if (urlPatientId) {
+              router.push(`/patients/${urlPatientId}`);
+            } else {
+              setState((s) => ({ ...s, step: "patient" }));
+            }
           } else if (state.step === "examination") {
             setState((s) => ({ ...s, step: "history" }));
           } else if (state.step === "assessment") {
@@ -172,7 +176,11 @@ export default function NewReachEncounterPage() {
           } else if (state.step === "review") {
             setState((s) => ({ ...s, step: "assessment" }));
           } else {
-            router.back();
+            if (urlPatientId) {
+              router.push(`/patients/${urlPatientId}`);
+            } else {
+              router.back();
+            }
           }
         }}
       />

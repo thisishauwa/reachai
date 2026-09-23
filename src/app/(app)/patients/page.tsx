@@ -2,7 +2,6 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { Send, Smile } from "lucide-react";
 import { useSession } from "@/lib/session/session-context";
 import { usePatients } from "@/lib/queries/patients";
 import { MobileSubpageHeader } from "@/components/nav/mobile-subpage-header";
@@ -88,26 +87,6 @@ export default function PatientsPage() {
             className="w-full h-[48px] sm:h-[52px] pl-11 pr-4 rounded-[16px] bg-[#fafafa] text-base text-[#242b33] placeholder:text-[#8e8e8e] focus:bg-[#f4f4f5] transition-colors border-0 shadow-none outline-none"
           />
         </div>
-
-        {/* Filter Action Button */}
-        <button
-          type="button"
-          aria-label="Filter"
-          style={{ border: "none", outline: "none", boxShadow: "none" }}
-          className="size-[48px] sm:size-[52px] rounded-[16px] bg-[#fafafa] hover:bg-[#f4f4f5] flex items-center justify-center text-[#0073F3] shrink-0 transition-colors cursor-pointer border-0 shadow-none"
-        >
-          <Send className="size-5" />
-        </button>
-
-        {/* Biometric / Smile Action Button */}
-        <button
-          type="button"
-          aria-label="Biometrics"
-          style={{ border: "none", outline: "none", boxShadow: "none" }}
-          className="size-[48px] sm:size-[52px] rounded-[16px] bg-[#fafafa] hover:bg-[#f4f4f5] flex items-center justify-center text-[#0073F3] shrink-0 transition-colors cursor-pointer border-0 shadow-none"
-        >
-          <Smile className="size-5" />
-        </button>
       </div>
 
       {/* Patients List with Alphabetical Grouping */}

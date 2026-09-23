@@ -319,28 +319,38 @@ export default function ReferralDetailPage() {
       {/* Action Buttons */}
       {(referral.status === "created" || referral.status === "arrived") && (
         <div className="flex flex-col gap-2.5 pt-2">
-          {referral.status === "created" && (
-            <button
-              type="button"
-              disabled={transition.isPending}
-              onClick={() => doTransition("arrived")}
-              style={{ borderRadius: "12px", border: "none", outline: "none", boxShadow: "none" }}
-              className="w-full h-[52px] rounded-[12px] bg-[#0073F3] hover:bg-[#0062d4] text-white font-medium text-[16px] transition-colors cursor-pointer flex items-center justify-center border-0 border-none shadow-none outline-none"
-            >
-              {transition.isPending ? "Updating..." : "Mark arrived"}
-            </button>
-          )}
+          {actor.isDestinationMember ? (
+            <>
+              {referral.status === "created" && (
+                <button
+                  type="button"
+                  disabled={transition.isPending}
+                  onClick={() => doTransition("arrived")}
+                  style={{ borderRadius: "12px", border: "none", outline: "none", boxShadow: "none" }}
+                  className="w-full h-[52px] rounded-[12px] bg-[#0073F3] hover:bg-[#0062d4] text-white font-medium text-[16px] transition-colors cursor-pointer flex items-center justify-center border-0 border-none shadow-none outline-none"
+                >
+                  {transition.isPending ? "Updating..." : "Mark arrived"}
+                </button>
+              )}
 
-          {referral.status === "arrived" && (
-            <button
-              type="button"
-              disabled={transition.isPending}
-              onClick={() => doTransition("closed")}
-              style={{ borderRadius: "12px", border: "none", outline: "none", boxShadow: "none" }}
-              className="w-full h-[52px] rounded-[12px] bg-[#0073F3] hover:bg-[#0062d4] text-white font-medium text-[16px] transition-colors cursor-pointer flex items-center justify-center border-0 border-none shadow-none outline-none"
-            >
-              {transition.isPending ? "Updating..." : "Mark closed"}
-            </button>
+              {referral.status === "arrived" && (
+                <button
+                  type="button"
+                  disabled={transition.isPending}
+                  onClick={() => doTransition("closed")}
+                  style={{ borderRadius: "12px", border: "none", outline: "none", boxShadow: "none" }}
+                  className="w-full h-[52px] rounded-[12px] bg-[#0073F3] hover:bg-[#0062d4] text-white font-medium text-[16px] transition-colors cursor-pointer flex items-center justify-center border-0 border-none shadow-none outline-none"
+                >
+                  {transition.isPending ? "Updating..." : "Mark closed"}
+                </button>
+              )}
+            </>
+          ) : (
+            <div className="w-full py-3 px-4 rounded-[12px] bg-[#f0f7ff] text-[#0073F3] text-sm text-center font-medium">
+              {referral.status === "created"
+                ? "Awaiting patient arrival at destination facility"
+                : "Patient arrived at destination facility (under care)"}
+            </div>
           )}
 
           {!showCancel ? (
