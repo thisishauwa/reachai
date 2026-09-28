@@ -61,17 +61,18 @@ function getSyndromeIcon(code: string) {
 
 // Fallback list of 10 standard syndromes from Figma 0:1264 if database is loading or empty
 const FALLBACK_SYNDROMES = [
-  { id: "FEVER_RASH", code: "FEVER_RASH", label_en: "Fever with rash", label_ha: "Zazzabi da kurji" },
-  { id: "ACUTE_WATERY_DIARRHOEA", code: "ACUTE_WATERY_DIARRHOEA", label_en: "Acute watery diarrhea", label_ha: "Gudawa mai ruwa-ruwa" },
-  { id: "FEVER_BLEEDING", code: "FEVER_BLEEDING", label_en: "Fever with bleeding", label_ha: "Zazzabi da zubar jini" },
-  { id: "FEVER_NECK_STIFFNESS", code: "FEVER_NECK_STIFFNESS", label_en: "Fever with neck stiffness", label_ha: "Zazzabi da tauri wuya" },
-  { id: "ACUTE_FLACCID_PARALYSIS", code: "ACUTE_FLACCID_PARALYSIS", label_en: "Accute flaccid paralysis", label_ha: "Sanyin kafa ko hannu na gaggawa" },
-  { id: "ACUTE_RESPIRATORY_ILLNESS", code: "ACUTE_RESPIRATORY_ILLNESS", label_en: "Accute respiratory illness", label_ha: "Ciwon numfashi na gaggawa" },
-  { id: "JAUNDICE", code: "JAUNDICE", label_en: "Jaundice", label_ha: "Ciwon shawara" },
-  { id: "COUGH_OVER_TWO_WEEKS", code: "COUGH_OVER_TWO_WEEKS", label_en: "Cough > 2 weeks", label_ha: "Tari na mako 2 ko fiye" },
-  { id: "NEONATAL_DANGER_SIGNS", code: "NEONATAL_DANGER_SIGNS", label_en: "Neonatal danger signs", label_ha: "Alamomin hadari ga jariri" },
+  { id: "FEVER_RASH", code: "FEVER_RASH", label_en: "Fever + skin rash + cough, runny nose or red eyes", label_ha: "Zazzabi da kurji da tari, majina ko jan idanu" },
+  { id: "ACUTE_WATERY_DIARRHOEA", code: "ACUTE_WATERY_DIARRHOEA", label_en: "Acute watery diarrhoea", label_ha: "Gudawa mai ruwa-ruwa" },
+  { id: "FEVER_BLEEDING", code: "FEVER_BLEEDING", label_en: "Fever + bleeding without a clear reason", label_ha: "Zazzabi da zubar jini ba tare da dalilin da ya bayyana ba" },
+  { id: "FEVER_NECK_STIFFNESS", code: "FEVER_NECK_STIFFNESS", label_en: "Fever + stiff neck or swollen/bulging soft spot on baby's head", label_ha: "Zazzabi da taurin wuya ko kumburi a kan jariri" },
+  { id: "ACUTE_FLACCID_PARALYSIS", code: "ACUTE_FLACCID_PARALYSIS", label_en: "Acute flaccid paralysis", label_ha: "Sanyin kafa ko hannu na gaggawa" },
+  { id: "ACUTE_RESPIRATORY_ILLNESS", code: "ACUTE_RESPIRATORY_ILLNESS", label_en: "Cough + difficulty breathing or breathing unusually", label_ha: "Tari da wahalar numfashi ko numfashi ba bisa ka'ida ba" },
+  { id: "JAUNDICE", code: "JAUNDICE", label_en: "Fever + yellow eyes or yellow skin", label_ha: "Zazzabi da rawaya a idanu ko fata" },
+  { id: "COUGH_OVER_TWO_WEEKS", code: "COUGH_OVER_TWO_WEEKS", label_en: "Cough for more than two weeks", label_ha: "Tari na mako 2 ko fiye" },
+  { id: "NEONATAL_DANGER_SIGNS", code: "NEONATAL_DANGER_SIGNS", label_en: "Newborn unable to breastfeed/suck + stiff body or repeated jerking/spasms", label_ha: "Jariri da ba ya iya shayarwa/miye + taurin jiki ko girgiza jiki" },
   { id: "OTHER_PRIORITY", code: "OTHER_PRIORITY", label_en: "Other priority syndrome", label_ha: "Sauran cututtuka masu mahimmanci" },
 ];
+
 
 export function StepSyndrome({
   patientName = "Oyintari Werinipre",

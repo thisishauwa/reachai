@@ -1163,15 +1163,15 @@ using (
 
 insert into public.syndromes (code, label_en, label_ha, display_order)
 values
-  ('FEVER_RASH', 'Fever with rash', 'Zazzabi da kurji', 10),
+  ('FEVER_RASH', 'Fever + skin rash + cough, runny nose or red eyes', 'Zazzabi da kurji da tari, majina ko jan idanu', 10),
   ('ACUTE_WATERY_DIARRHOEA', 'Acute watery diarrhoea', 'Gudawa mai ruwa-ruwa', 20),
-  ('FEVER_BLEEDING', 'Fever with bleeding', 'Zazzabi da zubar jini', 30),
-  ('FEVER_NECK_STIFFNESS', 'Fever with neck stiffness', 'Zazzabi da taurin wuya', 40),
+  ('FEVER_BLEEDING', 'Fever + bleeding without a clear reason', 'Zazzabi da zubar jini ba tare da dalilin da ya bayyana ba', 30),
+  ('FEVER_NECK_STIFFNESS', 'Fever + stiff neck or swollen/bulging soft spot on baby''s head', 'Zazzabi da taurin wuya ko kumburi a kan jariri', 40),
   ('ACUTE_FLACCID_PARALYSIS', 'Acute flaccid paralysis', 'Sanyin kafa ko hannu na gaggawa', 50),
-  ('ACUTE_RESPIRATORY_ILLNESS', 'Acute respiratory illness', 'Ciwon numfashi na gaggawa', 60),
-  ('JAUNDICE', 'Jaundice', 'Ciwon shawara', 70),
+  ('ACUTE_RESPIRATORY_ILLNESS', 'Cough + difficulty breathing or breathing unusually', 'Tari da wahalar numfashi ko numfashi ba bisa ka''ida ba', 60),
+  ('JAUNDICE', 'Fever + yellow eyes or yellow skin', 'Zazzabi da rawaya a idanu ko fata', 70),
   ('COUGH_OVER_TWO_WEEKS', 'Cough for more than two weeks', 'Tari na mako 2 ko fiye', 80),
-  ('NEONATAL_DANGER_SIGNS', 'Neonatal danger signs', 'Alamomin hadari ga jariri', 90),
+  ('NEONATAL_DANGER_SIGNS', 'Newborn unable to breastfeed/suck + stiff body or repeated jerking/spasms', 'Jariri da ba ya iya shayarwa/miye + taurin jiki ko girgiza jiki', 90),
   ('OTHER_PRIORITY', 'Other priority syndrome', 'Sauran cututtuka masu mahimmanci', 100)
 on conflict (code) do update set
   label_en = excluded.label_en,
