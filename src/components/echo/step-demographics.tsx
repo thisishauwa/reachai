@@ -10,6 +10,9 @@ import { usePatients } from "@/lib/queries/patients";
 import { useSession } from "@/lib/session/session-context";
 import type { PrivacyMode } from "@/lib/supabase/database.types";
 
+// Age bands where occupation is not applicable (0–14 years)
+const CHILD_AGE_BANDS = new Set(["0_28_days", "1_11_months", "1_4_years", "5_14_years"]);
+
 interface StepDemographicsProps {
   privacyMode: PrivacyMode;
   onContinue: (data: {
@@ -60,6 +63,7 @@ export function StepDemographics({
   };
 
   const handleContinue = () => {
+    const isChildAgeBand = CHILD_AGE_BANDS.has(ageBand);
     if (privacyMode === "identified") {
       if (!fullName.trim()) {
         toast.error("Please enter the patient's full name");
@@ -69,7 +73,11 @@ export function StepDemographics({
         toast.error("Please select an age band");
         return;
       }
-      if (!occupationType) {
+      if (!sex) {
+        toast.error("Please select a sex option");
+        return;
+      }
+      if (!isChildAgeBand && !occupationType) {
         toast.error("Please select an occupation type");
         return;
       }
@@ -77,7 +85,8 @@ export function StepDemographics({
         fullName: fullName.trim(),
         phone: phone.trim() ? `+234${phone.trim()}` : undefined,
         ageBand,
-        occupationType,
+        sex,
+        occupationType: isChildAgeBand ? "not_applicable" : occupationType,
         existingPatientId: selectedExistingId || undefined,
       });
     } else {
@@ -90,7 +99,7 @@ export function StepDemographics({
         toast.error("Please select a sex option");
         return;
       }
-      if (!occupationType) {
+      if (!isChildAgeBand && !occupationType) {
         toast.error("Please select an occupation type");
         return;
       }
@@ -102,7 +111,7 @@ export function StepDemographics({
         ageBand,
         sex,
         pregnancyStatus: sex === "female" ? pregnancyStatus || null : null,
-        occupationType,
+        occupationType: isChildAgeBand ? "not_applicable" : occupationType,
       });
     }
   };
@@ -268,7 +277,7 @@ export function StepDemographics({
                 <div className="relative">
                   <select
                     value={ageBand}
-                    onChange={(e) => setAgeBand(e.target.value)}
+                    onChange={(e) => { setAgeBand(e.target.value); setOccupationType(""); }}
                     className="w-full appearance-none bg-white rounded-[12px] px-4 py-3.5 text-sm sm:text-base text-[#242b33] outline-none focus:ring-2 focus:ring-[#0073f3] transition-all pr-10"
                   >
                     <option value="">Select an age band</option>
@@ -282,19 +291,57 @@ export function StepDemographics({
                 </div>
               </div>
 
-              {/* Occupation Type */}
-              <div className="flex flex-col gap-1.5">
+              {/* Sex (identified mode) */}
+              <div className="flex flex-col gap-2">
                 <label className="text-sm font-medium text-[#242b33]">
-                  Occupation type
+                  Sex
                 </label>
-                <SearchableSelect
-                  options={OCCUPATION_TYPES}
-                  value={occupationType}
-                  onChange={setOccupationType}
-                  placeholder="Select an occupation"
-                  searchPlaceholder="Search occupation (e.g. Farmer, Trader)..."
-                />
+                <div className="grid grid-cols-2 gap-2.5">
+                  {[
+                    { value: "female", label: "Female" },
+                    { value: "male", label: "Male" },
+                  ].map((opt) => {
+                    const isSelected = sex === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setSex(opt.value)}
+                        className={cn(
+                          "h-[48px] rounded-[12px] px-4 font-medium text-sm sm:text-base flex items-center justify-center gap-2.5 border transition-all cursor-pointer",
+                          isSelected
+                            ? "bg-[#0073f3] text-white border-[#0073f3] shadow-sm"
+                            : "bg-white text-[#242b33] border-[#e4e8ec] hover:bg-[#fafafa]"
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "size-2 rounded-full",
+                            isSelected ? "bg-white" : "bg-[#c2cdd8]"
+                          )}
+                        />
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
+
+              {/* Occupation Type (hidden for 0–14 age bands) */}
+              {!CHILD_AGE_BANDS.has(ageBand) && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-[#242b33]">
+                    Occupation type
+                  </label>
+                  <SearchableSelect
+                    options={OCCUPATION_TYPES}
+                    value={occupationType}
+                    onChange={setOccupationType}
+                    placeholder="Select an occupation"
+                    searchPlaceholder="Search occupation (e.g. Farmer, Trader)..."
+                  />
+                </div>
+              )}
             </div>
           ) : (
             /* Anonymous mode fields (0:1855 & 0:1905) */
@@ -308,7 +355,7 @@ export function StepDemographics({
                   <select
                     id="age-band-select"
                     value={ageBand}
-                    onChange={(e) => setAgeBand(e.target.value)}
+                    onChange={(e) => { setAgeBand(e.target.value); setOccupationType(""); }}
                     className="w-full appearance-none bg-white rounded-[12px] px-4 py-3.5 text-sm sm:text-base text-[#242b33] outline-none focus:ring-2 focus:ring-[#0073f3] transition-all pr-10 cursor-pointer"
                   >
                     <option value="">Select an age band</option>
@@ -392,19 +439,21 @@ export function StepDemographics({
                 </div>
               )}
 
-              {/* Occupation Type (Searchable) */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-[#242b33]">
-                  Occupation type
-                </label>
-                <SearchableSelect
-                  options={OCCUPATION_TYPES}
-                  value={occupationType}
-                  onChange={setOccupationType}
-                  placeholder="Select an occupation"
-                  searchPlaceholder="Search occupation (e.g. Farmer, Trader)..."
-                />
-              </div>
+              {/* Occupation Type (Searchable — hidden for 0–14 age bands) */}
+              {!CHILD_AGE_BANDS.has(ageBand) && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-[#242b33]">
+                    Occupation type
+                  </label>
+                  <SearchableSelect
+                    options={OCCUPATION_TYPES}
+                    value={occupationType}
+                    onChange={setOccupationType}
+                    placeholder="Select an occupation"
+                    searchPlaceholder="Search occupation (e.g. Farmer, Trader)..."
+                  />
+                </div>
+              )}
 
               {/* Policy Consent Checkbox */}
               <button

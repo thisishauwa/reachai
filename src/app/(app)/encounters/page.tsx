@@ -10,9 +10,11 @@ import { MobileSubpageHeader } from "@/components/nav/mobile-subpage-header";
 export default function EncountersPage() {
   const { activeFacility, workflowMode } = useSession();
   const [search, setSearch] = useState("");
-  const { data: encounters = [], isLoading } = useEncounters(
+  const { data: rawEncounters = [], isLoading } = useEncounters(
     activeFacility?.facilityId
   );
+  // Filter out voided encounters from the list
+  const encounters = rawEncounters.filter((e) => e.status !== "voided");
 
   // Filter encounters by search
   const filteredEncounters = useMemo(() => {
@@ -175,14 +177,14 @@ export default function EncountersPage() {
 
                         {/* Action Button: Styled per Figma with clean 12px radius */}
                         <Link
-                          href={isClosed ? `/encounters/${e.id}` : newEncounterHref}
+                          href={`/encounters/${e.id}`}
                           style={{
                             borderRadius: "12px",
                             boxShadow: "none",
                           }}
                           className="bg-white border border-[#0073f3] hover:bg-[#0073f3]/5 px-3.5 sm:px-4 py-1.5 text-xs sm:text-sm font-medium text-[#0073f3] rounded-[12px] shrink-0 transition-colors shadow-none"
                         >
-                          {isClosed ? "View details" : "Complete encounter"}
+                          {isClosed ? "View details" : "View encounter"}
                         </Link>
                       </div>
                     </div>

@@ -328,10 +328,17 @@ export default function NewEchoEncounterPage() {
       {/* Top Header */}
       <EncounterHeader
         onBack={() => {
-          if (state.step === "setup") {
+          if (state.step === "privacy") {
+            router.back();
+          } else if (state.step === "setup") {
             setState((s) => ({ ...s, step: "privacy" }));
           } else if (state.step === "syndrome") {
-            setState((s) => ({ ...s, step: state.patientId ? "privacy" : "setup" }));
+            // If patient was preloaded (no setup step), go back to privacy; otherwise go to setup
+            if (state.patientId && !state.encounterId) {
+              setState((s) => ({ ...s, step: "privacy" }));
+            } else {
+              setState((s) => ({ ...s, step: "setup" }));
+            }
           } else if (state.step === "questions") {
             setState((s) => ({ ...s, step: "syndrome" }));
           } else if (state.step === "triage") {
@@ -415,7 +422,7 @@ export default function NewEchoEncounterPage() {
           patientCreatedAt={state.patientCreatedAt ?? new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
           isAnonymous={state.privacyMode === "anonymous"}
           sessionCode={state.sessionCode ?? undefined}
-          onPrevious={() => setState((s) => ({ ...s, step: state.patientId ? "privacy" : "setup" }))}
+          onPrevious={() => setState((s) => ({ ...s, step: "setup" }))}
           onSelect={(ids, labels) =>
             setState((s) => ({
               ...s,

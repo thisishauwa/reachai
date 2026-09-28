@@ -76,6 +76,10 @@ export default function ReferralDetailPage() {
   const closedDate = closedEvent ? new Date(closedEvent.occurred_at) : createdDate;
   const isClosed = referral.status === "closed" || Boolean(closedEvent);
 
+  const cancelledEvent = events.find((e) => e.to_status === "cancelled");
+  const cancelledDate = cancelledEvent ? new Date(cancelledEvent.occurred_at) : createdDate;
+  const isCancelled = referral.status === "cancelled" || Boolean(cancelledEvent);
+
   const incentive = Array.isArray(referral.incentive_evaluations)
     ? referral.incentive_evaluations[0]
     : null;
@@ -279,10 +283,16 @@ export default function ReferralDetailPage() {
             <div
               style={{ border: "none", boxShadow: "none" }}
               className={`size-[48px] rounded-full flex items-center justify-center shrink-0 border-0 shadow-none ${
-                isClosed ? "bg-[#f2f3f5]" : "bg-[#f2f3f5]/50"
+                isCancelled
+                  ? "bg-[#fff1ed]"
+                  : isClosed
+                  ? "bg-[#f2f3f5]"
+                  : "bg-[#f2f3f5]/50"
               }`}
             >
-              {isClosed ? (
+              {isCancelled ? (
+                <span className="text-[#e05338] text-base font-bold">✕</span>
+              ) : isClosed ? (
                 <img
                   src="/icons/tick.svg"
                   alt="Completed"
@@ -295,13 +305,23 @@ export default function ReferralDetailPage() {
             <div className="flex flex-col gap-0.5">
               <p
                 className={`font-medium text-[18px] ${
-                  isClosed ? "text-[#242b33]" : "text-[#a1aebc]"
+                  isCancelled
+                    ? "text-[#e05338]"
+                    : isClosed
+                    ? "text-[#242b33]"
+                    : "text-[#a1aebc]"
                 }`}
               >
-                Referral closed
+                {isCancelled ? "Referral cancelled" : "Referral closed"}
               </p>
               <div className="text-sm">
-                {isClosed ? (
+                {isCancelled ? (
+                  <div className="flex items-center gap-2 text-[#e05338]/80">
+                    <span>{format(cancelledDate, "HH:mm")}</span>
+                    <span className="size-1 rounded-full bg-[#e05338]/40" />
+                    <span>{format(cancelledDate, "d MMMM yyyy")}</span>
+                  </div>
+                ) : isClosed ? (
                   <div className="flex items-center gap-2 text-[#6e8298]">
                     <span>{format(closedDate, "HH:mm")}</span>
                     <span className="size-1 rounded-full bg-[#a1aebc]" />
@@ -313,6 +333,17 @@ export default function ReferralDetailPage() {
               </div>
             </div>
           </div>
+
+          {/* Cancellation reason (if available) */}
+          {isCancelled && cancelledEvent?.reason && (
+            <>
+              <div className="h-px bg-[#f0f0f0] w-full" />
+              <div className="bg-[#fff1ed] rounded-[16px] px-4 py-3 flex flex-col gap-1">
+                <span className="text-xs font-medium text-[#e05338] uppercase tracking-wider">Cancellation reason</span>
+                <p className="text-sm text-[#6e8298] leading-relaxed">{cancelledEvent.reason}</p>
+              </div>
+            </>
+          )}
         </div>
       </section>
 
