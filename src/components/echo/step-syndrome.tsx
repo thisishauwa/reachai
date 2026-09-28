@@ -65,7 +65,7 @@ const FALLBACK_SYNDROMES = [
   { id: "ACUTE_WATERY_DIARRHOEA", code: "ACUTE_WATERY_DIARRHOEA", label_en: "Acute watery diarrhoea", label_ha: "Gudawa mai ruwa-ruwa" },
   { id: "FEVER_BLEEDING", code: "FEVER_BLEEDING", label_en: "Fever + bleeding without a clear reason", label_ha: "Zazzabi da zubar jini ba tare da dalilin da ya bayyana ba" },
   { id: "FEVER_NECK_STIFFNESS", code: "FEVER_NECK_STIFFNESS", label_en: "Fever + stiff neck or swollen/bulging soft spot on baby's head", label_ha: "Zazzabi da taurin wuya ko kumburi a kan jariri" },
-  { id: "ACUTE_FLACCID_PARALYSIS", code: "ACUTE_FLACCID_PARALYSIS", label_en: "Acute flaccid paralysis", label_ha: "Sanyin kafa ko hannu na gaggawa" },
+  { id: "ACUTE_FLACCID_PARALYSIS", code: "ACUTE_FLACCID_PARALYSIS", label_en: "Sudden weakness or limpness in arms or legs", label_ha: "Rauni ko naushi da ba zato ba a hannaye ko ƙafafu" },
   { id: "ACUTE_RESPIRATORY_ILLNESS", code: "ACUTE_RESPIRATORY_ILLNESS", label_en: "Cough + difficulty breathing or breathing unusually", label_ha: "Tari da wahalar numfashi ko numfashi ba bisa ka'ida ba" },
   { id: "JAUNDICE", code: "JAUNDICE", label_en: "Fever + yellow eyes or yellow skin", label_ha: "Zazzabi da rawaya a idanu ko fata" },
   { id: "COUGH_OVER_TWO_WEEKS", code: "COUGH_OVER_TWO_WEEKS", label_en: "Cough for more than two weeks", label_ha: "Tari na mako 2 ko fiye" },
@@ -183,7 +183,7 @@ export function StepSyndrome({
                     type="button"
                     onClick={() => toggleSyndrome(syndrome.id)}
                     className={cn(
-                      "rounded-[16px] p-4 flex items-center gap-3.5 text-left transition-all cursor-pointer",
+                      "rounded-[16px] p-4 flex items-start gap-3.5 text-left transition-all cursor-pointer",
                       isSelected
                         ? "bg-[#eff6ff] ring-2 ring-[#0073f3]"
                         : "bg-white hover:bg-gray-50/80"
@@ -200,13 +200,13 @@ export function StepSyndrome({
                     <div className="flex flex-col gap-0.5 min-w-0 flex-1">
                       <span
                         className={cn(
-                          "font-medium text-sm sm:text-base truncate",
+                          "font-medium text-sm sm:text-base leading-snug",
                           isSelected ? "text-[#0073f3]" : "text-[#242b33]"
                         )}
                       >
                         {syndrome.label_en}
                       </span>
-                      <span className="text-xs text-[#6e8298] truncate">
+                      <span className="text-xs text-[#6e8298] leading-snug">
                         {syndrome.label_ha}
                       </span>
                     </div>

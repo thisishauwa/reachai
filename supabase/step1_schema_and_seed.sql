@@ -1167,7 +1167,7 @@ values
   ('ACUTE_WATERY_DIARRHOEA', 'Acute watery diarrhoea', 'Gudawa mai ruwa-ruwa', 20),
   ('FEVER_BLEEDING', 'Fever + bleeding without a clear reason', 'Zazzabi da zubar jini ba tare da dalilin da ya bayyana ba', 30),
   ('FEVER_NECK_STIFFNESS', 'Fever + stiff neck or swollen/bulging soft spot on baby''s head', 'Zazzabi da taurin wuya ko kumburi a kan jariri', 40),
-  ('ACUTE_FLACCID_PARALYSIS', 'Acute flaccid paralysis', 'Sanyin kafa ko hannu na gaggawa', 50),
+  ('ACUTE_FLACCID_PARALYSIS', 'Sudden weakness or limpness in arms or legs', 'Rauni ko naushi da ba zato ba a hannaye ko ƙafafu', 50),
   ('ACUTE_RESPIRATORY_ILLNESS', 'Cough + difficulty breathing or breathing unusually', 'Tari da wahalar numfashi ko numfashi ba bisa ka''ida ba', 60),
   ('JAUNDICE', 'Fever + yellow eyes or yellow skin', 'Zazzabi da rawaya a idanu ko fata', 70),
   ('COUGH_OVER_TWO_WEEKS', 'Cough for more than two weeks', 'Tari na mako 2 ko fiye', 80),

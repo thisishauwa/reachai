@@ -5,7 +5,6 @@
 --
 -- Labels left unchanged:
 --   ACUTE_WATERY_DIARRHOEA  — no PPMV mapping provided
---   ACUTE_FLACCID_PARALYSIS — no PPMV mapping provided
 --   COUGH_OVER_TWO_WEEKS    — no PPMV mapping provided
 --   OTHER_PRIORITY          — generic catch-all, no change needed
 
@@ -44,3 +43,9 @@ set
   label_en = 'Newborn unable to breastfeed/suck + stiff body or repeated jerking/spasms',
   label_ha = 'Jariri da ba ya iya shayarwa/miye + taurin jiki ko girgiza jiki'
 where code = 'NEONATAL_DANGER_SIGNS';
+
+update public.syndromes
+set
+  label_en = 'Sudden weakness or limpness in arms or legs',
+  label_ha = 'Rauni ko naushi da ba zato ba a hannaye ko ƙafafu'
+where code = 'ACUTE_FLACCID_PARALYSIS';
