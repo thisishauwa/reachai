@@ -18,20 +18,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-/**
- * AC3 — "Check danger signs" screen matching the Sentinel stakeholder prototype.
- *
- * Section 1 — Danger signs · alamun hatsari
- *   6 checkboxes, select all that apply.
- *
- * Section 2 — Dehydration · rashin ruwa
- *   Separate sub-section: No / Mild / moderate / Severe
- *
- * AC4 — Unusual symptoms:
- *   - The user must pick an IDSR category (required; blocks submission if missing).
- *   - Optional voice note or photo note can be added.
- */
-
 export const IDSR_CATEGORIES = [
   {
     code: "CATEGORY_4",
@@ -77,7 +63,7 @@ export function StepSyndrome({
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [dehydration, setDehydration] = useState<DehydrationLevel>("no");
 
-  // AC4 state
+  // Unusual symptoms state
   const [hasUnusual, setHasUnusual] = useState(false);
   const [idsrCategory, setIdsrCategory] = useState<string>("CATEGORY_4");
   const [categoryError, setCategoryError] = useState<string | null>(null);
@@ -129,7 +115,6 @@ export function StepSyndrome({
   };
 
   const handleContinue = () => {
-    // AC4 Edge Case: Unusual symptom without an IDSR category: show an inline error and block submission
     if (hasUnusual && !idsrCategory) {
       setCategoryError("Please select an IDSR category to report an unusual symptom.");
       toast.error("An IDSR category is required for unusual symptoms");
@@ -145,7 +130,6 @@ export function StepSyndrome({
       }
     }
 
-    // Include dehydration in codes so backend / questions step knows
     let allCodes =
       dehydration !== "no"
         ? [...codes, `DEHYDRATION_${dehydration.toUpperCase()}`]
@@ -177,391 +161,355 @@ export function StepSyndrome({
   };
 
   return (
-    <div className="w-full flex flex-col gap-0 bg-[#f2f3f0] min-h-screen">
-      <div className="flex flex-col gap-6 p-5 sm:p-8 pb-32">
-        {/* Heading */}
-        <div className="flex flex-col gap-1">
-          <p className="text-[12px] font-semibold uppercase tracking-widest text-[#6e8298]">
-            MODULE B+ · Danger signs
-          </p>
-          <h2 className="text-[26px] sm:text-[30px] font-bold text-[#1a1a1a] leading-tight">
-            Check danger signs
-          </h2>
-          <p className="text-[14px] text-[#6e8298]">
-            Alamun hatsari · danger signs. Tick what you notice, even if you are unsure.
-          </p>
-        </div>
+    <div className="w-full flex flex-col gap-6 pb-24 sm:pb-0">
+      <div className="relative w-full">
+        {/* Decorative background peeking card */}
+        <div className="absolute inset-x-4 -bottom-3 h-12 bg-[#f2f3f5] rounded-[20px] -z-10" />
 
-        {/* ── Section 1: Danger signs checkboxes ──────────────────── */}
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[15px] font-semibold text-[#1a1a1a]">
-              Danger signs · alamun hatsari
+        <div className="bg-[#f9f9f9] rounded-[20px] p-6 sm:p-10 flex flex-col gap-6">
+          {/* Eyebrow & Heading */}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[#0590f9] text-xs font-semibold uppercase tracking-wider">
+              Syndromic Screening
             </span>
-            <span className="text-[13px] text-[#6e8298]">Select all that apply</span>
+            <h2 className="text-xl sm:text-2xl font-normal text-[#001f3e] leading-snug">
+              <span className="font-medium">Check danger signs</span> · Alamun hatsari
+            </h2>
+            <p className="text-sm sm:text-base text-[#6e8298]">
+              Tick all symptoms observed or reported, even if mild or unsure.
+            </p>
           </div>
 
-          <div className="flex flex-col gap-2">
-            {DANGER_SIGNS.map((sign) => {
-              const isChecked = checked.has(sign.code);
-              return (
-                <button
-                  key={sign.id}
-                  type="button"
-                  id={`danger-sign-${sign.code.toLowerCase()}`}
-                  onClick={() => toggle(sign.code)}
-                  className={cn(
-                    "w-full bg-white rounded-[14px] px-4 py-3.5 flex items-center justify-between gap-3 text-left transition-all cursor-pointer border",
-                    isChecked
-                      ? "border-[#1a8f76] ring-1 ring-[#1a8f76]"
-                      : "border-[#e4e8ec] hover:bg-[#f9f9f9]"
-                  )}
-                >
-                  <div className="flex flex-col gap-0.5 min-w-0">
-                    <span className="text-[15px] font-semibold text-[#1a1a1a] leading-snug">
-                      {sign.label_en}
-                    </span>
-                    <span className="text-[13px] text-[#6e8298]">
-                      {sign.label_ha}
-                    </span>
-                  </div>
+          {/* ── Section 1: Danger Signs ─────────────────────────────── */}
+          <div className="bg-white rounded-[16px] p-5 sm:p-6 border border-[#e4e8ec] flex flex-col gap-4 shadow-none">
+            <div className="flex flex-col gap-0.5">
+              <label className="text-sm sm:text-base font-medium text-[#242b33]">
+                Danger Signs (Select all that apply)
+              </label>
+              <p className="text-xs sm:text-sm text-[#6e8298]">
+                Alamomin hatsari da aka lura da su
+              </p>
+            </div>
 
-                  {/* Checkbox */}
-                  <div
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {DANGER_SIGNS.map((sign) => {
+                const isChecked = checked.has(sign.code);
+                return (
+                  <button
+                    key={sign.id}
+                    type="button"
+                    id={`danger-sign-${sign.code.toLowerCase()}`}
+                    onClick={() => toggle(sign.code)}
                     className={cn(
-                      "size-6 rounded-[6px] border-2 flex items-center justify-center shrink-0 transition-all",
+                      "w-full rounded-[14px] px-4 py-3.5 flex items-center justify-between gap-3 text-left transition-all cursor-pointer border",
                       isChecked
-                        ? "border-[#1a8f76] bg-[#1a8f76]"
-                        : "border-[#c7d2de] bg-white"
+                        ? "border-[#0073f3] bg-[#f0f7ff] text-[#0073f3] shadow-sm ring-1 ring-[#0073f3]"
+                        : "border-[#e4e8ec] bg-white text-[#242b33] hover:bg-[#fafafa]"
                     )}
                   >
-                    {isChecked && (
-                      <svg viewBox="0 0 12 9" fill="none" className="size-3">
-                        <path
-                          d="M1 4.5L4.5 8L11 1"
-                          stroke="white"
-                          strokeWidth="2.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className={cn("text-sm sm:text-base leading-snug truncate", isChecked ? "font-semibold" : "font-medium")}>
+                        {sign.label_en}
+                      </span>
+                      <span className="text-xs text-[#6e8298] font-normal leading-tight mt-0.5">
+                        {sign.label_ha}
+                      </span>
+                    </div>
 
-        {/* ── Section 2: Dehydration sub-section ──────────────────── */}
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[15px] font-semibold text-[#1a1a1a]">
-              Dehydration · rashin ruwa
-            </span>
-            <span className="text-[13px] text-[#6e8298]">Mild, moderate, or severe</span>
+                    <div
+                      className={cn(
+                        "size-5 rounded-[5px] border flex items-center justify-center shrink-0 transition-colors",
+                        isChecked
+                          ? "bg-[#0073f3] border-[#0073f3] text-white"
+                          : "border-[#c7d2de] bg-white"
+                      )}
+                    >
+                      {isChecked && <Check className="size-3 stroke-[3]" />}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            {DEHYDRATION_OPTIONS.map((opt) => {
-              const sel = dehydration === opt.value;
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  id={`dehydration-${opt.value}`}
-                  onClick={() => setDehydration(opt.value)}
-                  className={cn(
-                    "min-h-[52px] w-full rounded-[14px] px-4 py-3 text-left text-[14px] font-medium",
-                    "flex items-center justify-between gap-2",
-                    "border transition-all cursor-pointer",
-                    sel
-                      ? "border-[#1a8f76] bg-[#e8f5f2] text-[#1a8f76]"
-                      : "border-[#e4e8ec] bg-white text-[#242b33] hover:bg-[#f9f9f9]"
-                  )}
-                >
-                  <span>{opt.label_en}</span>
-                  {sel && (
-                    <svg viewBox="0 0 16 16" fill="none" className="size-4 shrink-0">
-                      <path
-                        d="M3 8.5L6.5 12L13 5"
-                        stroke="#1a8f76"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* ── Section 3: Unusual Symptoms (AC4) ──────────────────── */}
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[15px] font-semibold text-[#1a1a1a]">
-              Unusual symptoms · alamun da ba a saba gani ba
-            </span>
-            <span className="text-[13px] text-[#6e8298]">
-              Flag unexpected symptoms, clusters, or conditions requiring public health surveillance
-            </span>
-          </div>
-
-          {/* Toggle button */}
-          <button
-            type="button"
-            id="toggle-unusual-symptom-btn"
-            onClick={() => {
-              setHasUnusual(!hasUnusual);
-              if (categoryError) setCategoryError(null);
-            }}
-            className={cn(
-              "w-full bg-white rounded-[14px] px-4 py-3.5 flex items-center justify-between gap-3 text-left transition-all cursor-pointer border",
-              hasUnusual
-                ? "border-[#d97706] ring-1 ring-[#d97706] bg-[#fffbeb]"
-                : "border-[#e4e8ec] hover:bg-[#f9f9f9]"
-            )}
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              <div
-                className={cn(
-                  "size-9 rounded-[10px] flex items-center justify-center shrink-0",
-                  hasUnusual
-                    ? "bg-[#fef3c7] text-[#d97706]"
-                    : "bg-[#f1f5f9] text-[#64748b]"
-                )}
-              >
-                <AlertTriangle className="size-5" />
-              </div>
-              <div className="flex flex-col gap-0.5 min-w-0">
-                <span className="text-[15px] font-semibold text-[#1a1a1a] leading-snug">
-                  Report unusual symptom or novel cluster
-                </span>
-                <span className="text-[13px] text-[#6e8298]">
-                  Bayar da rahoton alamar da ba a saba gani ba
-                </span>
-              </div>
+          {/* ── Section 2: Dehydration ──────────────────────────────── */}
+          <div className="bg-white rounded-[16px] p-5 sm:p-6 border border-[#e4e8ec] flex flex-col gap-4 shadow-none">
+            <div className="flex flex-col gap-0.5">
+              <label className="text-sm sm:text-base font-medium text-[#242b33]">
+                Dehydration Level
+              </label>
+              <p className="text-xs sm:text-sm text-[#6e8298]">
+                Rashin ruwa a jiki
+              </p>
             </div>
 
-            <div
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              {DEHYDRATION_OPTIONS.map((opt) => {
+                const isSel = dehydration === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    id={`dehydration-${opt.value}`}
+                    onClick={() => setDehydration(opt.value)}
+                    className={cn(
+                      "w-full rounded-[14px] px-4 py-3.5 flex items-center justify-between gap-3 text-left transition-all cursor-pointer border",
+                      isSel
+                        ? "border-[#0073f3] bg-[#f0f7ff] text-[#0073f3] shadow-sm ring-1 ring-[#0073f3]"
+                        : "border-[#e4e8ec] bg-white text-[#242b33] hover:bg-[#fafafa]"
+                    )}
+                  >
+                    <div className="flex flex-col min-w-0">
+                      <span className={cn("text-sm sm:text-base leading-snug", isSel ? "font-semibold" : "font-normal")}>
+                        {opt.label_en}
+                      </span>
+                      <span className="text-xs text-[#6e8298] font-normal leading-tight mt-0.5">
+                        {opt.label_ha}
+                      </span>
+                    </div>
+
+                    <div
+                      className={cn(
+                        "size-5 rounded-full border flex items-center justify-center shrink-0 transition-colors",
+                        isSel
+                          ? "bg-[#0073f3] border-[#0073f3] text-white"
+                          : "border-[#c7d2de] bg-white"
+                      )}
+                    >
+                      {isSel && <Check className="size-3 stroke-[3]" />}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ── Section 3: Unusual Symptoms (IDSR Category) ─────────── */}
+          <div className="bg-white rounded-[16px] p-5 sm:p-6 border border-[#e4e8ec] flex flex-col gap-4 shadow-none">
+            <button
+              type="button"
+              id="unusual-symptom-toggle"
+              onClick={() => {
+                setHasUnusual(!hasUnusual);
+                setCategoryError(null);
+              }}
               className={cn(
-                "size-6 rounded-[6px] border-2 flex items-center justify-center shrink-0 transition-all",
+                "w-full rounded-[14px] p-4 flex items-center justify-between gap-3 text-left transition-all cursor-pointer border",
                 hasUnusual
-                  ? "border-[#d97706] bg-[#d97706]"
-                  : "border-[#c7d2de] bg-white"
+                  ? "border-[#f59e0b] bg-[#fffbeb] text-[#92400e]"
+                  : "border-[#e4e8ec] bg-white hover:bg-[#fafafa]"
               )}
             >
-              {hasUnusual && (
-                <svg viewBox="0 0 12 9" fill="none" className="size-3">
-                  <path
-                    d="M1 4.5L4.5 8L11 1"
-                    stroke="white"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              )}
-            </div>
-          </button>
+              <div className="flex items-center gap-3 min-w-0">
+                <div
+                  className={cn(
+                    "size-10 rounded-[10px] flex items-center justify-center shrink-0",
+                    hasUnusual
+                      ? "bg-[#fde68a] text-[#b45309]"
+                      : "bg-[#f2f3f5] text-[#6e8298]"
+                  )}
+                >
+                  <AlertTriangle className="size-5" />
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-sm sm:text-base font-semibold leading-tight">
+                    Unusual Symptom / Health Event
+                  </span>
+                  <span className="text-xs text-[#6e8298] leading-tight mt-0.5">
+                    Wata cuta ko alamun da ba a saba gani ba (IDSR Tier 4)
+                  </span>
+                </div>
+              </div>
 
-          {/* Expanded Unusual Symptoms form */}
-          {hasUnusual && (
-            <div className="bg-white border border-[#fde68a] rounded-[16px] p-4 sm:p-5 flex flex-col gap-4 animate-in slide-in-from-top-2 duration-200">
-              {/* IDSR Category selection (Required by AC4) */}
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-[14px] font-semibold text-[#1a1a1a]">
+              <div
+                className={cn(
+                  "size-5 rounded-[5px] border flex items-center justify-center shrink-0 transition-colors",
+                  hasUnusual
+                    ? "bg-[#f59e0b] border-[#f59e0b] text-white"
+                    : "border-[#c7d2de] bg-white"
+                )}
+              >
+                {hasUnusual && <Check className="size-3 stroke-[3]" />}
+              </div>
+            </button>
+
+            {/* Expanded Unusual Symptoms form */}
+            {hasUnusual && (
+              <div className="bg-[#fafafa] border border-[#fde68a] rounded-[14px] p-4 sm:p-5 flex flex-col gap-4 animate-in slide-in-from-top-2 duration-200">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-semibold text-[#242b33]">
                     IDSR Category <span className="text-[#e05338]">* Required</span>
                   </label>
-                  <span className="text-[11px] text-[#6e8298] uppercase font-bold tracking-wider">
-                    Surveillance Tier
-                  </span>
-                </div>
-                <p className="text-[12px] text-[#6e8298]">
-                  Select the official surveillance category for this unusual presentation.
-                </p>
-
-                <div className="grid gap-2 pt-1">
-                  {IDSR_CATEGORIES.map((cat) => {
-                    const isSel = idsrCategory === cat.code;
-                    return (
-                      <button
-                        key={cat.code}
-                        type="button"
-                        id={`idsr-category-${cat.code.toLowerCase()}`}
-                        onClick={() => {
-                          setIdsrCategory(cat.code);
-                          setCategoryError(null);
-                        }}
-                        className={cn(
-                          "w-full rounded-[12px] px-3.5 py-3 text-left border transition-all cursor-pointer flex items-start justify-between gap-3",
-                          isSel
-                            ? "border-[#d97706] bg-[#fef3c7] text-[#92400e]"
-                            : "border-[#e4e8ec] bg-[#fafafa] hover:bg-[#f1f5f9] text-[#242b33]"
-                        )}
-                      >
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-[13px] font-semibold">{cat.label_en}</span>
-                          <span className="text-[11px] opacity-75">{cat.label_ha}</span>
-                          <span className="text-[11px] text-[#64748b] mt-0.5">{cat.desc}</span>
-                        </div>
-                        {isSel && (
-                          <div className="size-5 rounded-full bg-[#d97706] text-white flex items-center justify-center shrink-0 mt-0.5">
-                            <Check className="size-3" />
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {categoryError && (
-                  <p className="text-[12px] text-[#e05338] font-medium mt-1">
-                    {categoryError}
+                  <p className="text-xs text-[#6e8298]">
+                    Select the official public health surveillance category for this presentation.
                   </p>
-                )}
-              </div>
 
-              {/* Optional Voice Note & Photo (AC4) */}
-              <div className="flex flex-col gap-2 pt-2 border-t border-[#f1f5f9]">
-                <div className="flex items-center justify-between">
-                  <span className="text-[13px] font-semibold text-[#1a1a1a]">
-                    Clinical Evidence <span className="text-[#6e8298] font-normal">(Optional)</span>
-                  </span>
-                  <span className="text-[11px] text-[#6e8298]">Voice or photo note</span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  {/* Voice Note */}
-                  <div className="flex flex-col gap-1">
-                    {!voiceRecorded ? (
-                      <button
-                        type="button"
-                        id="record-voice-note-btn"
-                        onClick={handleToggleVoiceRecord}
-                        className={cn(
-                          "h-[48px] rounded-[12px] px-3 flex items-center justify-center gap-2 border text-[13px] font-medium transition-all cursor-pointer",
-                          isRecording
-                            ? "bg-[#fee2e2] border-[#ef4444] text-[#b91c1c] animate-pulse"
-                            : "bg-[#f8fafc] border-[#e2e8f0] text-[#334155] hover:bg-[#f1f5f9]"
-                        )}
-                      >
-                        <Mic className={cn("size-4", isRecording && "text-[#ef4444]")} />
-                        <span>{isRecording ? `Recording ${recordingSeconds}s...` : "Voice Note"}</span>
-                      </button>
-                    ) : (
-                      <div className="h-[48px] rounded-[12px] px-3 bg-[#e8f5f2] border border-[#1a8f76] flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5 text-[#1a8f76] text-[12px] font-medium">
-                          <CheckCircle2 className="size-4" />
-                          <span>Voice note (0:{recordingSeconds < 10 ? `0${recordingSeconds}` : recordingSeconds})</span>
-                        </div>
+                  <div className="grid gap-2 pt-1">
+                    {IDSR_CATEGORIES.map((cat) => {
+                      const isSel = idsrCategory === cat.code;
+                      return (
                         <button
+                          key={cat.code}
                           type="button"
+                          id={`idsr-category-${cat.code.toLowerCase()}`}
                           onClick={() => {
-                            setVoiceRecorded(false);
-                            setRecordingSeconds(0);
+                            setIdsrCategory(cat.code);
+                            setCategoryError(null);
                           }}
-                          className="size-6 text-[#ef4444] hover:bg-[#fee2e2] rounded-full flex items-center justify-center cursor-pointer"
-                          aria-label="Remove voice note"
+                          className={cn(
+                            "w-full rounded-[12px] p-3 text-left border transition-all cursor-pointer flex items-start justify-between gap-3",
+                            isSel
+                              ? "border-[#0073f3] bg-[#f0f7ff] text-[#0073f3] font-medium"
+                              : "border-[#e4e8ec] bg-white hover:bg-gray-50 text-[#242b33]"
+                          )}
                         >
-                          <Trash2 className="size-3.5" />
+                          <div className="flex flex-col gap-0.5 min-w-0">
+                            <span className="text-xs sm:text-sm font-semibold leading-tight">{cat.label_en}</span>
+                            <span className="text-[11px] text-[#6e8298] leading-tight">{cat.label_ha}</span>
+                            <span className="text-[11px] text-[#8e8e8e] mt-0.5 leading-tight">{cat.desc}</span>
+                          </div>
+                          {isSel && (
+                            <div className="size-4 rounded-full bg-[#0073f3] text-white flex items-center justify-center shrink-0 mt-0.5">
+                              <Check className="size-2.5 stroke-[3]" />
+                            </div>
+                          )}
                         </button>
-                      </div>
-                    )}
+                      );
+                    })}
                   </div>
 
-                  {/* Photo Note */}
-                  <div className="flex flex-col gap-1">
-                    {!photoDataUrl ? (
-                      <label
-                        id="add-photo-note-label"
-                        className="h-[48px] rounded-[12px] px-3 flex items-center justify-center gap-2 border border-[#e2e8f0] bg-[#f8fafc] text-[#334155] hover:bg-[#f1f5f9] text-[13px] font-medium transition-all cursor-pointer"
-                      >
-                        <Camera className="size-4 text-[#64748b]" />
-                        <span>Add Photo</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          capture="environment"
-                          onChange={handlePhotoUpload}
-                          className="hidden"
-                        />
-                      </label>
-                    ) : (
-                      <div className="h-[48px] rounded-[12px] px-2 bg-[#e8f5f2] border border-[#1a8f76] flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={photoDataUrl}
-                            alt="Attached note"
-                            className="size-8 rounded-[6px] object-cover shrink-0 border"
-                          />
-                          <span className="text-[12px] text-[#1a8f76] font-medium truncate">
-                            Photo attached
-                          </span>
-                        </div>
+                  {categoryError && (
+                    <p className="text-xs text-[#e05338] font-medium mt-1">
+                      {categoryError}
+                    </p>
+                  )}
+                </div>
+
+                {/* Evidence attachments */}
+                <div className="flex flex-col gap-2 pt-2 border-t border-[#e4e8ec]">
+                  <span className="text-xs font-semibold text-[#242b33]">
+                    Clinical Evidence (Optional voice note or photo)
+                  </span>
+
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {/* Voice Note */}
+                    <div className="flex flex-col gap-1">
+                      {!voiceRecorded ? (
                         <button
                           type="button"
-                          onClick={() => setPhotoDataUrl(null)}
-                          className="size-6 text-[#ef4444] hover:bg-[#fee2e2] rounded-full flex items-center justify-center cursor-pointer shrink-0"
-                          aria-label="Remove photo"
+                          id="record-voice-note-btn"
+                          onClick={handleToggleVoiceRecord}
+                          className={cn(
+                            "h-[46px] rounded-[12px] px-3 flex items-center justify-center gap-2 border text-xs sm:text-sm font-medium transition-all cursor-pointer",
+                            isRecording
+                              ? "bg-[#fee2e2] border-[#ef4444] text-[#b91c1c] animate-pulse"
+                              : "bg-white border-[#e4e8ec] text-[#495766] hover:bg-[#fafafa]"
+                          )}
                         >
-                          <Trash2 className="size-3.5" />
+                          <Mic className="size-4 shrink-0" />
+                          <span>{isRecording ? `Recording (${recordingSeconds}s)...` : "Voice Note"}</span>
                         </button>
-                      </div>
-                    )}
+                      ) : (
+                        <div className="h-[46px] rounded-[12px] px-3 bg-[#f0fdf4] border border-[#bbf7d0] text-[#166534] flex items-center justify-between gap-2 text-xs">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <CheckCircle2 className="size-4 text-[#22c55e] shrink-0" />
+                            <span className="truncate">Voice ({recordingSeconds || 6}s)</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setVoiceRecorded(false);
+                              setRecordingSeconds(0);
+                            }}
+                            className="text-[#991b1b] hover:text-[#b91c1c] cursor-pointer"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Photo Attach */}
+                    <div className="flex flex-col gap-1">
+                      {!photoDataUrl ? (
+                        <label
+                          htmlFor="photo-upload-input"
+                          className="h-[46px] rounded-[12px] px-3 bg-white border border-[#e4e8ec] text-[#495766] hover:bg-[#fafafa] flex items-center justify-center gap-2 text-xs sm:text-sm font-medium transition-all cursor-pointer"
+                        >
+                          <Camera className="size-4 shrink-0" />
+                          <span>Attach Photo</span>
+                          <input
+                            id="photo-upload-input"
+                            type="file"
+                            accept="image/*"
+                            onChange={handlePhotoUpload}
+                            className="hidden"
+                          />
+                        </label>
+                      ) : (
+                        <div className="h-[46px] rounded-[12px] px-3 bg-[#f0fdf4] border border-[#bbf7d0] text-[#166534] flex items-center justify-between gap-2 text-xs">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <CheckCircle2 className="size-4 text-[#22c55e] shrink-0" />
+                            <span>Photo attached</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setPhotoDataUrl(null)}
+                            className="text-[#991b1b] hover:text-[#b91c1c] cursor-pointer"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
+
+                  {/* Notes */}
+                  <textarea
+                    value={unusualNotes}
+                    onChange={(e) => setUnusualNotes(e.target.value)}
+                    placeholder="Describe unusual symptoms or clinical observations..."
+                    rows={2}
+                    className="w-full bg-white rounded-[12px] border border-[#e4e8ec] p-3 text-xs sm:text-sm text-[#242b33] placeholder:text-[#a1aebc] outline-none focus:border-[#0073f3] focus:ring-2 focus:ring-[#0073f3]/20 transition-all resize-none mt-1"
+                  />
                 </div>
               </div>
-
-              {/* Optional Description */}
-              <div className="flex flex-col gap-1">
-                <label className="text-[12px] font-medium text-[#475569]">
-                  Notes / Description <span className="text-[#94a3b8]">(Optional)</span>
-                </label>
-                <textarea
-                  value={unusualNotes}
-                  onChange={(e) => setUnusualNotes(e.target.value)}
-                  placeholder="Describe unusual rash pattern, sudden cluster of cases, or other observations..."
-                  rows={2}
-                  className="w-full bg-[#f8fafc] rounded-[10px] border border-[#e2e8f0] p-2.5 text-[13px] text-[#1a1a1a] placeholder:text-[#94a3b8] outline-none focus:ring-2 focus:ring-[#d97706] resize-none"
-                />
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
-      {/* ── Bottom bar — fixed ─────────────────────────────────────── */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-between gap-3 px-5 py-4 bg-[#f2f3f0] border-t border-[#e4e8ec]">
-        {onPrevious ? (
+      {/* ── Bottom Actions Bar ──────────────────────────────────────── */}
+      <div className="w-full flex items-center justify-between pt-2 sm:static fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-gray-100 sm:border-0 sm:p-0 sm:bg-transparent z-40">
+        <div className="bg-[#f9f3ff] px-4 py-2.5 rounded-full inline-flex items-center">
+          <span className="text-[#9175a7] text-sm sm:text-base font-medium">
+            Danger Signs
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          {onPrevious && (
+            <button
+              type="button"
+              onClick={onPrevious}
+              className="rounded-[12px] border border-[#e4e8ec] bg-white hover:bg-[#fafafa] text-[#495766] px-5 py-3.5 text-sm sm:text-base font-medium transition-colors cursor-pointer"
+            >
+              Previous
+            </button>
+          )}
           <button
             type="button"
-            onClick={onPrevious}
-            className="size-11 rounded-full bg-white border border-[#e4e8ec] text-[#6e8298] flex items-center justify-center hover:bg-[#f9f9f9] transition-colors cursor-pointer"
-            aria-label="Go back"
+            id="symptom-continue-btn"
+            onClick={handleContinue}
+            className="rounded-[12px] bg-[#0073f3] hover:bg-[#0060cb] text-white px-8 py-3.5 text-sm sm:text-base font-medium transition-colors cursor-pointer shadow-sm"
           >
-            ←
+            Continue to questions
+            {(checked.size > 0 || hasUnusual) && (
+              <span className="ml-2 text-xs font-normal opacity-80">
+                ({checked.size + (hasUnusual ? 1 : 0)} selected)
+              </span>
+            )}
           </button>
-        ) : (
-          <div />
-        )}
-        <button
-          type="button"
-          id="symptom-continue-btn"
-          onClick={handleContinue}
-          className="flex-1 max-w-xs h-12 rounded-[14px] bg-[#1a3a34] hover:bg-[#142e28] text-white font-semibold text-[15px] transition-colors cursor-pointer"
-        >
-          Continue
-          {(checked.size > 0 || hasUnusual) && (
-            <span className="ml-2 text-[13px] opacity-70">
-              ({checked.size + (hasUnusual ? 1 : 0)} selected)
-            </span>
-          )}
-        </button>
+        </div>
       </div>
     </div>
   );
