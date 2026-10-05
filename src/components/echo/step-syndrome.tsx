@@ -1,260 +1,223 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Thermometer,
-  Droplet,
-  Droplets,
-  Frown,
-  Accessibility,
-  Wind,
-  Eye,
-  ShieldAlert,
-  Baby,
-  Stethoscope,
-  Volume2,
-  VolumeX,
-  Check,
-} from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useSyndromes } from "@/lib/queries/reference";
-import { Skeleton } from "@/components/ui/skeleton";
+import {
+  DANGER_SIGNS,
+  DEHYDRATION_OPTIONS,
+  dangerSignsToSyndromes,
+  type DehydrationLevel,
+} from "@/lib/reference/individual-symptoms";
+
+/**
+ * AC3 — "Check danger signs" screen matching the Sentinel stakeholder prototype.
+ *
+ * Section 1 — Danger signs · alamun hatsari
+ *   6 checkboxes, select all that apply.
+ *
+ * Section 2 — Dehydration · rashin ruwa
+ *   Separate sub-section: No / Mild / moderate / Severe
+ *   (always shown, separate from the checkbox list)
+ *
+ * Continue is always enabled so a PPMV with zero signs can still submit.
+ * The selected codes + dehydration level are converted to IDSR syndrome IDs
+ * for the backend.
+ */
 
 interface StepSyndromeProps {
-  encounterCode?: string;
-  patientName?: string;
-  patientCreatedAt?: string;
-  isAnonymous?: boolean;
   sessionCode?: string;
-  /** Called with the array of selected IDs and their English labels */
-  onSelect: (syndromeIds: string[], labels: string[]) => void;
+  onSelect: (
+    symptomCodes: string[],
+    syndromeIds: string[],
+    labels: string[]
+  ) => void;
   onPrevious?: () => void;
 }
 
-// Map syndrome codes to representative Lucide icons
-function getSyndromeIcon(code: string) {
-  switch (code.toUpperCase()) {
-    case "FEVER_RASH":
-      return <Thermometer className="size-5 text-[#0073f3]" />;
-    case "ACUTE_WATERY_DIARRHOEA":
-    case "ACUTE_WATERY_DIARRHEA":
-      return <Droplet className="size-5 text-[#0073f3]" />;
-    case "FEVER_BLEEDING":
-      return <Droplets className="size-5 text-[#0073f3]" />;
-    case "FEVER_NECK_STIFFNESS":
-      return <Frown className="size-5 text-[#0073f3]" />;
-    case "ACUTE_FLACCID_PARALYSIS":
-      return <Accessibility className="size-5 text-[#0073f3]" />;
-    case "ACUTE_RESPIRATORY_ILLNESS":
-      return <Wind className="size-5 text-[#0073f3]" />;
-    case "JAUNDICE":
-      return <Eye className="size-5 text-[#0073f3]" />;
-    case "COUGH_OVER_TWO_WEEKS":
-      return <ShieldAlert className="size-5 text-[#0073f3]" />;
-    case "NEONATAL_DANGER_SIGNS":
-      return <Baby className="size-5 text-[#0073f3]" />;
-    case "OTHER_PRIORITY":
-    default:
-      return <Stethoscope className="size-5 text-[#0073f3]" />;
-  }
-}
-
-// Fallback list of 10 standard syndromes from Figma 0:1264 if database is loading or empty
-const FALLBACK_SYNDROMES = [
-  { id: "FEVER_RASH", code: "FEVER_RASH", label_en: "Fever + skin rash + cough, runny nose or red eyes", label_ha: "Zazzabi da kurji da tari, majina ko jan idanu" },
-  { id: "ACUTE_WATERY_DIARRHOEA", code: "ACUTE_WATERY_DIARRHOEA", label_en: "Acute watery diarrhoea", label_ha: "Gudawa mai ruwa-ruwa" },
-  { id: "FEVER_BLEEDING", code: "FEVER_BLEEDING", label_en: "Fever + bleeding without a clear reason", label_ha: "Zazzabi da zubar jini ba tare da dalilin da ya bayyana ba" },
-  { id: "FEVER_NECK_STIFFNESS", code: "FEVER_NECK_STIFFNESS", label_en: "Fever + stiff neck or swollen/bulging soft spot on baby's head", label_ha: "Zazzabi da taurin wuya ko kumburi a kan jariri" },
-  { id: "ACUTE_FLACCID_PARALYSIS", code: "ACUTE_FLACCID_PARALYSIS", label_en: "Sudden weakness or limpness in arms or legs", label_ha: "Rauni ko naushi da ba zato ba a hannaye ko ƙafafu" },
-  { id: "ACUTE_RESPIRATORY_ILLNESS", code: "ACUTE_RESPIRATORY_ILLNESS", label_en: "Cough + difficulty breathing or breathing unusually", label_ha: "Tari da wahalar numfashi ko numfashi ba bisa ka'ida ba" },
-  { id: "JAUNDICE", code: "JAUNDICE", label_en: "Fever + yellow eyes or yellow skin", label_ha: "Zazzabi da rawaya a idanu ko fata" },
-  { id: "COUGH_OVER_TWO_WEEKS", code: "COUGH_OVER_TWO_WEEKS", label_en: "Cough for more than two weeks", label_ha: "Tari na mako 2 ko fiye" },
-  { id: "NEONATAL_DANGER_SIGNS", code: "NEONATAL_DANGER_SIGNS", label_en: "Newborn unable to breastfeed/suck + stiff body or repeated jerking/spasms", label_ha: "Jariri da ba ya iya shayarwa/miye + taurin jiki ko girgiza jiki" },
-  { id: "OTHER_PRIORITY", code: "OTHER_PRIORITY", label_en: "Other priority syndrome", label_ha: "Sauran cututtuka masu mahimmanci" },
-];
-
-
 export function StepSyndrome({
-  patientName = "Oyintari Werinipre",
-  patientCreatedAt = "10 Aug 2023",
-  isAnonymous = false,
   sessionCode,
   onSelect,
   onPrevious,
 }: StepSyndromeProps) {
-  const { data: dbSyndromes = [], isLoading } = useSyndromes();
-  const syndromes = dbSyndromes.length > 0 ? dbSyndromes : FALLBACK_SYNDROMES;
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [dehydration, setDehydration] = useState<DehydrationLevel>("no");
 
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [hausaAudioOn, setHausaAudioOn] = useState(false);
-
-  const toggleSyndrome = (id: string) => {
-    setSelectedIds((prev) => {
+  const toggle = (code: string) =>
+    setChecked((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+      next.has(code) ? next.delete(code) : next.add(code);
       return next;
     });
-  };
 
-  const handleNext = () => {
-    if (selectedIds.size === 0) return;
-    const selected = syndromes.filter((s) => selectedIds.has(s.id));
-    onSelect(
-      selected.map((s) => s.id),
-      selected.map((s) => s.label_en)
-    );
+  const handleContinue = () => {
+    const codes = Array.from(checked);
+    const syndromeIds = dangerSignsToSyndromes(codes, dehydration);
+
+    // Include dehydration in codes so backend / questions step knows
+    const allCodes = dehydration !== "no" ? [...codes, `DEHYDRATION_${dehydration.toUpperCase()}`] : codes;
+
+    const labels = [
+      ...codes.map(
+        (c) => DANGER_SIGNS.find((s) => s.code === c)?.label_en ?? c
+      ),
+      ...(dehydration !== "no"
+        ? [DEHYDRATION_OPTIONS.find((o) => o.value === dehydration)?.label_en ?? "Dehydration"]
+        : []),
+    ];
+
+    onSelect(allCodes, syndromeIds, labels);
   };
 
   return (
-    <div className="w-full flex flex-col gap-6 pb-24 sm:pb-0">
-      <div className="relative w-full">
-        {/* Decorative background peeking card */}
-        <div className="absolute inset-x-4 -bottom-3 h-12 bg-[#f2f3f5] rounded-[20px] -z-10" />
+    <div className="w-full flex flex-col gap-0 bg-[#f2f3f0] min-h-screen">
+      <div className="flex flex-col gap-6 p-5 sm:p-8 pb-32">
+        {/* Heading */}
+        <div className="flex flex-col gap-1">
+          <p className="text-[12px] font-semibold uppercase tracking-widest text-[#6e8298]">
+            MODULE B+ · Danger signs
+          </p>
+          <h2 className="text-[26px] sm:text-[30px] font-bold text-[#1a1a1a] leading-tight">
+            Check danger signs
+          </h2>
+          <p className="text-[14px] text-[#6e8298]">
+            Alamun hatsari · danger signs. Tick what you notice, even if you are unsure.
+          </p>
+        </div>
 
-        <div className="bg-[#f9f9f9] rounded-[20px] p-6 sm:p-10 flex flex-col gap-6">
-          {/* Section Eyebrow and Heading */}
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[#0590f9] text-xs font-semibold uppercase tracking-wider">
-              Chief complaint
+        {/* ── Section 1: Danger signs checkboxes ──────────────────── */}
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[15px] font-semibold text-[#1a1a1a]">
+              Danger signs · alamun hatsari
             </span>
-            <h2 className="text-xl sm:text-2xl font-light text-[#001f3e] leading-snug">
-              Select one or more chief complaints for this visit.
-            </h2>
+            <span className="text-[13px] text-[#6e8298]">Select all that apply</span>
           </div>
 
-          {/* Patient Card Banner */}
-          <div className="bg-[#f2f3f5] rounded-[20px] px-5 py-4 flex items-center justify-between">
-            <div className="flex flex-col gap-0.5">
-              <span className="font-medium text-base text-[#001f3f]">
-                {isAnonymous ? "Anonymous Patient" : patientName}
-              </span>
-              <span className="text-sm text-[#6e8298]">
-                {isAnonymous
-                  ? `Session code: ${sessionCode || "ANON-SESSION"}`
-                  : `Created ${patientCreatedAt}`}
-              </span>
-            </div>
-          </div>
+          <div className="flex flex-col gap-2">
+            {DANGER_SIGNS.map((sign) => {
+              const isChecked = checked.has(sign.code);
+              return (
+                <button
+                  key={sign.id}
+                  type="button"
+                  id={`danger-sign-${sign.code.toLowerCase()}`}
+                  onClick={() => toggle(sign.code)}
+                  className={cn(
+                    "w-full bg-white rounded-[14px] px-4 py-3.5 flex items-center justify-between gap-3 text-left transition-all cursor-pointer border",
+                    isChecked
+                      ? "border-[#1a8f76] ring-1 ring-[#1a8f76]"
+                      : "border-[#e4e8ec] hover:bg-[#f9f9f9]"
+                  )}
+                >
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    <span className="text-[15px] font-semibold text-[#1a1a1a] leading-snug">
+                      {sign.label_en}
+                    </span>
+                    <span className="text-[13px] text-[#6e8298]">
+                      {sign.label_ha}
+                    </span>
+                  </div>
 
-          {/* Subheader: Primary Symptom & Hausa Audio Toggle */}
-          <div className="flex items-center justify-between pt-1">
-            <span className="text-xs uppercase tracking-wider text-[#6e8298] font-medium">
-              {selectedIds.size === 0
-                ? "Select all that apply"
-                : `${selectedIds.size} selected`}
-            </span>
-            <button
-              type="button"
-              onClick={() => setHausaAudioOn(!hausaAudioOn)}
-              className={cn(
-                "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors",
-                hausaAudioOn
-                  ? "bg-[#e0edff] text-[#0073f3]"
-                  : "bg-[#f2f3f5] text-[#6e8298] hover:text-[#242b33]"
-              )}
-            >
-              {hausaAudioOn ? (
-                <Volume2 className="size-3.5" />
-              ) : (
-                <VolumeX className="size-3.5" />
-              )}
-              <span>Hausa audio: {hausaAudioOn ? "On" : "Off"}</span>
-            </button>
-          </div>
-
-          {/* Syndrome Grid — multi-select */}
-          {isLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {Array.from({ length: 10 }).map((_, i) => (
-                <Skeleton key={i} className="h-20 w-full rounded-[16px]" />
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {syndromes.map((syndrome) => {
-                const isSelected = selectedIds.has(syndrome.id);
-                return (
-                  <button
-                    key={syndrome.id}
-                    type="button"
-                    onClick={() => toggleSyndrome(syndrome.id)}
+                  {/* Checkbox */}
+                  <div
                     className={cn(
-                      "rounded-[16px] p-4 flex items-start gap-3.5 text-left transition-all cursor-pointer",
-                      isSelected
-                        ? "bg-[#eff6ff] ring-2 ring-[#0073f3]"
-                        : "bg-white hover:bg-gray-50/80"
+                      "size-6 rounded-[6px] border-2 flex items-center justify-center shrink-0 transition-all",
+                      isChecked
+                        ? "border-[#1a8f76] bg-[#1a8f76]"
+                        : "border-[#c7d2de] bg-white"
                     )}
                   >
-                    <div
-                      className={cn(
-                        "size-11 rounded-[12px] flex items-center justify-center shrink-0 transition-colors",
-                        isSelected ? "bg-[#cce3fd]" : "bg-[#f0f7ff]"
-                      )}
-                    >
-                      {getSyndromeIcon(syndrome.code)}
-                    </div>
-                    <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                      <span
-                        className={cn(
-                          "font-medium text-sm sm:text-base leading-snug",
-                          isSelected ? "text-[#0073f3]" : "text-[#242b33]"
-                        )}
-                      >
-                        {syndrome.label_en}
-                      </span>
-                      <span className="text-xs text-[#6e8298] leading-snug">
-                        {syndrome.label_ha}
-                      </span>
-                    </div>
-                    {/* Checkbox indicator */}
-                    <div
-                      className={cn(
-                        "size-6 rounded-[6px] flex items-center justify-center shrink-0 transition-all border-2",
-                        isSelected
-                          ? "bg-[#0073f3] border-[#0073f3]"
-                          : "bg-white border-[#c7d2de]"
-                      )}
-                    >
-                      {isSelected && <Check className="size-3.5 text-white" strokeWidth={3} />}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+                    {isChecked && (
+                      <svg viewBox="0 0 12 9" fill="none" className="size-3">
+                        <path
+                          d="M1 4.5L4.5 8L11 1"
+                          stroke="white"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ── Section 2: Dehydration sub-section ──────────────────── */}
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[15px] font-semibold text-[#1a1a1a]">
+              Dehydration · rashin ruwa
+            </span>
+            <span className="text-[13px] text-[#6e8298]">Mild, moderate, or severe</span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            {DEHYDRATION_OPTIONS.map((opt) => {
+              const sel = dehydration === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  id={`dehydration-${opt.value}`}
+                  onClick={() => setDehydration(opt.value)}
+                  className={cn(
+                    "min-h-[52px] w-full rounded-[14px] px-4 py-3 text-left text-[14px] font-medium",
+                    "flex items-center justify-between gap-2",
+                    "border transition-all cursor-pointer",
+                    sel
+                      ? "border-[#1a8f76] bg-[#e8f5f2] text-[#1a8f76]"
+                      : "border-[#e4e8ec] bg-white text-[#242b33] hover:bg-[#f9f9f9]"
+                  )}
+                >
+                  <span>{opt.label_en}</span>
+                  {sel && (
+                    <svg viewBox="0 0 16 16" fill="none" className="size-4 shrink-0">
+                      <path
+                        d="M3 8.5L6.5 12L13 5"
+                        stroke="#1a8f76"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
-      {/* Bottom Actions Bar - fixed to bottom on mobile */}
-      <div className="w-full flex items-center justify-between pt-2 sm:static fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-gray-100 sm:border-0 sm:p-0 sm:bg-transparent z-40">
-        <div className="bg-[#f9f3ff] px-4 py-2.5 rounded-full inline-flex items-center">
-          <span className="text-[#9175a7] text-sm sm:text-base font-medium">
-            Page 1 of 4
-          </span>
-        </div>
-        <div className="flex items-center gap-3">
-          {onPrevious && (
-            <button
-              type="button"
-              onClick={onPrevious}
-              className="rounded-[12px] bg-[#f2f3f5] hover:bg-[#e4e8ec] text-[#0073f3] px-6 py-3.5 text-sm sm:text-base font-medium transition-colors cursor-pointer"
-            >
-              Previous
-            </button>
-          )}
+      {/* ── Bottom bar — fixed ─────────────────────────────────────── */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-between gap-3 px-5 py-4 bg-[#f2f3f0] border-t border-[#e4e8ec]">
+        {onPrevious ? (
           <button
             type="button"
-            disabled={selectedIds.size === 0}
-            onClick={handleNext}
-            className="rounded-[12px] bg-[#0073f3] hover:bg-[#0060cb] text-white px-8 py-3.5 text-sm sm:text-base font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+            onClick={onPrevious}
+            className="size-11 rounded-full bg-white border border-[#e4e8ec] text-[#6e8298] flex items-center justify-center hover:bg-[#f9f9f9] transition-colors cursor-pointer"
+            aria-label="Go back"
           >
-            Next {selectedIds.size > 0 ? `(${selectedIds.size})` : ""}
+            ←
           </button>
-        </div>
+        ) : (
+          <div />
+        )}
+        <button
+          type="button"
+          id="symptom-continue-btn"
+          onClick={handleContinue}
+          className="flex-1 max-w-xs h-12 rounded-[14px] bg-[#1a3a34] hover:bg-[#142e28] text-white font-semibold text-[15px] transition-colors cursor-pointer"
+        >
+          Continue
+          {checked.size > 0 && (
+            <span className="ml-2 text-[13px] opacity-70">
+              ({checked.size} selected)
+            </span>
+          )}
+        </button>
       </div>
     </div>
   );

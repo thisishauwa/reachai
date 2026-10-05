@@ -1,502 +1,354 @@
 "use client";
 
 import { useState } from "react";
-import { Smile, Check, ChevronDown, UserCheck } from "lucide-react";
-import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { AGE_BANDS, OCCUPATION_TYPES } from "@/lib/reference/demographics";
-import { SearchableSelect } from "@/components/ui/searchable-select";
-import { usePatients } from "@/lib/queries/patients";
-import { useSession } from "@/lib/session/session-context";
-import type { PrivacyMode } from "@/lib/supabase/database.types";
+import { toast } from "sonner";
 
-// Age bands where occupation is not applicable (0–14 years)
-const CHILD_AGE_BANDS = new Set(["0_28_days", "1_11_months", "1_4_years", "5_14_years"]);
+/**
+ * AC2 — Demographics screen matching the Sentinel prototype exactly.
+ *
+ * Fields (in order):
+ *  1. Age            — free-text integer (years completed)
+ *  2. Sex            — Female / Male / Other / not stated
+ *  3. Pregnancy      — Not pregnant / not applicable | Pregnant | Not sure / prefer not to say
+ *  4. Insurance      — No insurance | NHIA / other cover
+ *  5. Distance       — Under 2 km | 2–5 km | Over 5 km
+ *  6. Education      — None / primary | Secondary | Tertiary
+ *  7. Occupation     — Trader | Farmer | Student | Other
+ *  8. Visit type     — First visit | Follow-up
+ *
+ * Anonymous-only: no name / phone / identifiers.
+ */
+
+export interface DemographicsData {
+  ageExact: number | null;
+  sex: "female" | "male" | "other_not_stated";
+  pregnancyStatus: "not_pregnant" | "pregnant" | "not_sure" | null;
+  insuranceStatus: "no_insurance" | "nhia_or_other";
+  distanceFromOutlet: "under_2km" | "2_5km" | "over_5km";
+  educationLevel: "none_primary" | "secondary" | "tertiary";
+  occupationType: "trader" | "farmer" | "student" | "other";
+  visitType: "first_visit" | "follow_up";
+}
 
 interface StepDemographicsProps {
-  privacyMode: PrivacyMode;
-  onContinue: (data: {
-    fullName?: string;
-    phone?: string;
-    ageBand: string;
-    sex?: string;
-    pregnancyStatus?: string | null;
-    occupationType: string;
-    existingPatientId?: string;
-  }) => void;
+  sessionCode?: string;
+  onGenerateNewCode?: () => void;
+  onContinue: (data: DemographicsData) => void;
+  onPrevious?: () => void;
+}
+
+// ── Tile grid helper ─────────────────────────────────────────────────────────
+function TileGrid<T extends string>({
+  options,
+  value,
+  onChange,
+  cols = 2,
+}: {
+  options: { value: T; label: string }[];
+  value: T | "";
+  onChange: (v: T) => void;
+  cols?: 1 | 2 | 3 | 4;
+}) {
+  const gridClass = {
+    1: "grid-cols-1",
+    2: "grid-cols-2",
+    3: "grid-cols-3",
+    4: "grid-cols-2",
+  }[cols];
+
+  return (
+    <div className={cn("grid gap-2", gridClass)}>
+      {options.map((opt) => {
+        const sel = value === opt.value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onChange(opt.value as T)}
+            className={cn(
+              "min-h-[52px] w-full rounded-[14px] px-4 py-3 text-left text-[14px] font-medium",
+              "flex items-center justify-between gap-2",
+              "border transition-all cursor-pointer",
+              sel
+                ? "border-[#1a8f76] bg-[#e8f5f2] text-[#1a8f76]"
+                : "border-[#e4e8ec] bg-white text-[#242b33] hover:bg-[#f9f9f9]"
+            )}
+          >
+            <span>{opt.label}</span>
+            {sel && (
+              <svg viewBox="0 0 16 16" fill="none" className="size-4 shrink-0">
+                <path
+                  d="M3 8.5L6.5 12L13 5"
+                  stroke="#1a8f76"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Section label ────────────────────────────────────────────────────────────
+function FieldLabel({
+  label,
+  sub,
+  required,
+}: {
+  label: string;
+  sub?: string;
+  required?: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-[15px] font-semibold text-[#1a1a1a]">
+        {label}
+        {required && <span className="text-[#e05338] ml-0.5"> *</span>}
+      </span>
+      {sub && <span className="text-[13px] text-[#6e8298]">{sub}</span>}
+    </div>
+  );
 }
 
 export function StepDemographics({
-  privacyMode,
+  sessionCode,
+  onGenerateNewCode,
   onContinue,
+  onPrevious,
 }: StepDemographicsProps) {
-  const { activeFacility } = useSession();
-  const { data: existingPatients = [] } = usePatients(activeFacility?.facilityId);
-
-  const [locale, setLocale] = useState<"en" | "ha">("en");
-  const [isSelectingExisting, setIsSelectingExisting] = useState(false);
-  const [selectedExistingId, setSelectedExistingId] = useState<string>("");
-
-  // Identified fields
-  const [fullName, setFullName] = useState("");
-  const [phone, setPhone] = useState("");
-
-  // Shared fields
-  const [ageBand, setAgeBand] = useState("");
-  const [occupationType, setOccupationType] = useState("");
-
-  // Anonymous fields
-  const [sex, setSex] = useState<string>("");
-  const [pregnancyStatus, setPregnancyStatus] = useState<string>("");
-  const [policyConsent, setPolicyConsent] = useState(false);
-
-  const handleSelectExisting = (patientId: string) => {
-    const p = existingPatients.find((pt) => pt.id === patientId);
-    if (!p) return;
-    setSelectedExistingId(p.id);
-    setFullName(p.full_name);
-    setPhone(p.phone_e164 ? p.phone_e164.replace("+234", "") : "");
-    setAgeBand(p.age_band);
-    setOccupationType(p.occupation_type);
-    setSex(p.sex);
-    setPregnancyStatus(p.pregnancy_status ?? "");
-  };
+  const [age, setAge] = useState("");
+  const [sex, setSex] = useState<DemographicsData["sex"] | "">("");
+  const [pregnancy, setPregnancy] = useState<DemographicsData["pregnancyStatus"] | "">("");
+  const [insurance, setInsurance] = useState<DemographicsData["insuranceStatus"] | "">("");
+  const [distance, setDistance] = useState<DemographicsData["distanceFromOutlet"] | "">("");
+  const [education, setEducation] = useState<DemographicsData["educationLevel"] | "">("");
+  const [occupation, setOccupation] = useState<DemographicsData["occupationType"] | "">("");
+  const [visitType, setVisitType] = useState<DemographicsData["visitType"] | "">("");
 
   const handleContinue = () => {
-    const isChildAgeBand = CHILD_AGE_BANDS.has(ageBand);
-    if (privacyMode === "identified") {
-      if (!fullName.trim()) {
-        toast.error("Please enter the patient's full name");
-        return;
-      }
-      if (!ageBand) {
-        toast.error("Please select an age band");
-        return;
-      }
-      if (!sex) {
-        toast.error("Please select a sex option");
-        return;
-      }
-      if (!isChildAgeBand && !occupationType) {
-        toast.error("Please select an occupation type");
-        return;
-      }
-      onContinue({
-        fullName: fullName.trim(),
-        phone: phone.trim() ? `+234${phone.trim()}` : undefined,
-        ageBand,
-        sex,
-        occupationType: isChildAgeBand ? "not_applicable" : occupationType,
-        existingPatientId: selectedExistingId || undefined,
-      });
-    } else {
-      // Anonymous
-      if (!ageBand) {
-        toast.error("Please select an age band");
-        return;
-      }
-      if (!sex) {
-        toast.error("Please select a sex option");
-        return;
-      }
-      if (!isChildAgeBand && !occupationType) {
-        toast.error("Please select an occupation type");
-        return;
-      }
-      if (!policyConsent) {
-        toast.error("Please consent to the privacy policy before continuing");
-        return;
-      }
-      onContinue({
-        ageBand,
-        sex,
-        pregnancyStatus: sex === "female" ? pregnancyStatus || null : null,
-        occupationType: isChildAgeBand ? "not_applicable" : occupationType,
-      });
-    }
+    if (!sex) return toast.error("Please select a sex");
+    if (!pregnancy && sex === "female") return toast.error("Please select pregnancy status");
+    if (!insurance) return toast.error("Please select health insurance status");
+    if (!distance) return toast.error("Please select distance from outlet");
+    if (!education) return toast.error("Please select education level");
+    if (!occupation) return toast.error("Please select occupation");
+    if (!visitType) return toast.error("Please select visit type");
+
+    onContinue({
+      ageExact: age ? parseInt(age, 10) : null,
+      sex: sex as DemographicsData["sex"],
+      pregnancyStatus: pregnancy || (sex === "female" ? null : "not_pregnant"),
+      insuranceStatus: insurance as DemographicsData["insuranceStatus"],
+      distanceFromOutlet: distance as DemographicsData["distanceFromOutlet"],
+      educationLevel: education as DemographicsData["educationLevel"],
+      occupationType: occupation as DemographicsData["occupationType"],
+      visitType: visitType as DemographicsData["visitType"],
+    });
   };
 
   return (
-    <div className="w-full flex flex-col gap-6 pb-24 sm:pb-0">
-      <div className="relative w-full">
-        {/* Decorative background peeking card */}
-        <div className="absolute inset-x-4 -bottom-3 h-12 bg-[#f2f3f5] rounded-[20px] -z-10" />
+    <div className="w-full flex flex-col gap-0 bg-[#f2f3f0] min-h-screen">
+      {/* Card */}
+      <div className="flex flex-col gap-6 p-5 sm:p-8 pb-32">
+        {/* Heading */}
+        <div className="flex flex-col gap-1">
+          <p className="text-[12px] font-semibold uppercase tracking-widest text-[#6e8298]">
+            MODULE A · About patient
+          </p>
+          <h2 className="text-[26px] sm:text-[30px] font-bold text-[#1a1a1a] leading-tight">
+            Who is visiting today?
+          </h2>
+          <p className="text-[14px] text-[#6e8298]">
+            Bayanan mara lafiya · patient details
+          </p>
+        </div>
 
-        <div className="bg-[#f9f9f9] rounded-[20px] p-6 sm:p-10 flex flex-col gap-6">
-          {/* Section Eyebrow and Heading */}
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[#0590f9] text-xs font-semibold uppercase tracking-wider">
-              Patient demographics
-            </span>
-            <h2 className="text-xl sm:text-2xl font-normal text-[#001f3e] leading-snug">
-              <span className="font-medium">Collect essential</span> demographic
-              information for this encounter.
-            </h2>
-          </div>
-
-          {/* Mode Banner */}
-          {privacyMode === "identified" ? (
-            <div className="bg-[#f0f7ff] rounded-[20px] p-5 flex items-start gap-4">
-              <div className="size-12 rounded-[12px] bg-[#cce3fd] text-[#0073f3] flex items-center justify-center shrink-0">
-                <Smile className="size-6" />
+        {/* ── Study Code Card (matching Sentinel image) ──────────── */}
+        {sessionCode && (
+          <div className="bg-[#eef6f3] border border-[#c4e4dc] rounded-[16px] p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="size-11 rounded-[12px] bg-[#d9eee7] flex items-center justify-center text-[#1a8f76] shrink-0">
+                <svg viewBox="0 0 24 24" fill="none" className="size-5 stroke-[#1a8f76]" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="16" y1="13" x2="8" y2="13" />
+                  <line x1="16" y1="17" x2="8" y2="17" />
+                  <polyline points="10 9 9 9 8 9" />
+                </svg>
               </div>
-              <div className="flex flex-col gap-0.5">
-                <h3 className="font-medium text-[#242b33] text-base sm:text-lg">
-                  Identified data
-                </h3>
-                <p className="text-sm sm:text-base text-[#6e8298]">
-                  Personal identifiers will be collected to coordinate care with the
-                  referral clinic.
+              <div>
+                <p className="text-[11px] font-bold tracking-wider text-[#6e8298] uppercase">
+                  STUDY CODE
+                </p>
+                <p className="text-[17px] font-bold text-[#1a3a34] tracking-tight">
+                  {sessionCode}
                 </p>
               </div>
             </div>
-          ) : (
-            <div className="bg-[#f2f3f5] rounded-[20px] p-5 flex items-start gap-4">
-              <div className="size-12 rounded-[12px] bg-[#e4e8ec] text-[#6e8298] flex items-center justify-center shrink-0">
-                <Smile className="size-6" />
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <h3 className="font-medium text-[#242b33] text-base sm:text-lg">
-                  Anonymous syndromic data only
-                </h3>
-                <p className="text-sm sm:text-base text-[#6e8298]">
-                  No personal data or identifiers will be collected in this screening
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Language Toggle */}
-          <div className="inline-flex bg-[#f2f3f5] p-1 rounded-[8px] self-start">
-            <button
-              type="button"
-              onClick={() => setLocale("en")}
-              className={cn(
-                "px-3.5 py-1.5 text-sm rounded-[6px] transition-colors font-medium",
-                locale === "en"
-                  ? "bg-white text-[#242b33]"
-                  : "text-[#a1aebc] hover:text-[#495766]"
-              )}
-            >
-              English
-            </button>
-            <button
-              type="button"
-              onClick={() => setLocale("ha")}
-              className={cn(
-                "px-3.5 py-1.5 text-sm rounded-[6px] transition-colors font-medium",
-                locale === "ha"
-                  ? "bg-white text-[#242b33]"
-                  : "text-[#a1aebc] hover:text-[#495766]"
-              )}
-            >
-              Hausa
-            </button>
-          </div>
-
-          {/* Form Fields */}
-          {privacyMode === "identified" ? (
-            <div className="flex flex-col gap-5">
-              {/* Existing Patient Quick Pick Toggle (if patients exist) */}
-              {existingPatients.length > 0 && (
-                <div className="flex items-center justify-between pb-1">
-                  <button
-                    type="button"
-                    onClick={() => setIsSelectingExisting(!isSelectingExisting)}
-                    className="text-xs text-[#0073f3] hover:underline flex items-center gap-1 font-medium"
-                  >
-                    <UserCheck className="size-3.5" />
-                    {isSelectingExisting
-                      ? "Or enter new patient manually"
-                      : "Choose from existing facility patients"}
-                  </button>
-                </div>
-              )}
-
-              {isSelectingExisting && existingPatients.length > 0 && (
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-[#242b33]">
-                    Select existing patient
-                  </label>
-                  <div className="relative">
-                    <select
-                      value={selectedExistingId}
-                      onChange={(e) => handleSelectExisting(e.target.value)}
-                      className="w-full appearance-none bg-white rounded-[12px] px-4 py-3.5 text-sm sm:text-base text-[#242b33] outline-none focus:ring-2 focus:ring-[#0073f3] transition-all pr-10"
-                    >
-                      <option value="">Select a registered patient...</option>
-                      {existingPatients.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.full_name} ({p.patient_code})
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 size-5 text-[#6e8298] pointer-events-none" />
-                  </div>
-                </div>
-              )}
-
-              {/* Full Name */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-[#242b33]">
-                  Full name
-                </label>
-                <input
-                  type="text"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Jane Doe"
-                  className="w-full bg-white rounded-[12px] px-4 py-3.5 text-sm sm:text-base text-[#242b33] placeholder:text-[#a1aebc] outline-none focus:ring-2 focus:ring-[#0073f3] transition-all"
-                />
-              </div>
-
-              {/* Phone Number (Optional) */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-[#242b33]">
-                  Phone number <span className="text-[#6e8298] font-normal">(Optional)</span>
-                </label>
-                <div className="flex bg-white rounded-[12px] overflow-hidden focus-within:ring-2 focus-within:ring-[#0073f3]">
-                  <div className="flex items-center px-4 text-sm sm:text-base text-[#242b33] font-medium bg-gray-50/50">
-                    +234
-                  </div>
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="0800 000 0000"
-                    className="w-full bg-transparent px-3 py-3.5 text-sm sm:text-base text-[#242b33] placeholder:text-[#a1aebc] outline-none"
-                  />
-                </div>
-              </div>
-
-              {/* Age Band */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-[#242b33]">
-                  Age band
-                </label>
-                <div className="relative">
-                  <select
-                    value={ageBand}
-                    onChange={(e) => { setAgeBand(e.target.value); setOccupationType(""); }}
-                    className="w-full appearance-none bg-white rounded-[12px] px-4 py-3.5 text-sm sm:text-base text-[#242b33] outline-none focus:ring-2 focus:ring-[#0073f3] transition-all pr-10"
-                  >
-                    <option value="">Select an age band</option>
-                    {AGE_BANDS.map((b) => (
-                      <option key={b.value} value={b.value}>
-                        {b.label}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 size-5 text-[#6e8298] pointer-events-none" />
-                </div>
-              </div>
-
-              {/* Sex (identified mode) */}
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-[#242b33]">
-                  Sex
-                </label>
-                <div className="grid grid-cols-2 gap-2.5">
-                  {[
-                    { value: "female", label: "Female" },
-                    { value: "male", label: "Male" },
-                  ].map((opt) => {
-                    const isSelected = sex === opt.value;
-                    return (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => setSex(opt.value)}
-                        className={cn(
-                          "h-[48px] rounded-[12px] px-4 font-medium text-sm sm:text-base flex items-center justify-center gap-2.5 border transition-all cursor-pointer",
-                          isSelected
-                            ? "bg-[#0073f3] text-white border-[#0073f3] shadow-sm"
-                            : "bg-white text-[#242b33] border-[#e4e8ec] hover:bg-[#fafafa]"
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            "size-2 rounded-full",
-                            isSelected ? "bg-white" : "bg-[#c2cdd8]"
-                          )}
-                        />
-                        {opt.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Occupation Type (hidden for 0–14 age bands) */}
-              {!CHILD_AGE_BANDS.has(ageBand) && (
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-[#242b33]">
-                    Occupation type
-                  </label>
-                  <SearchableSelect
-                    options={OCCUPATION_TYPES}
-                    value={occupationType}
-                    onChange={setOccupationType}
-                    placeholder="Select an occupation"
-                    searchPlaceholder="Search occupation (e.g. Farmer, Trader)..."
-                  />
-                </div>
-              )}
-            </div>
-          ) : (
-            /* Anonymous mode fields (0:1855 & 0:1905) */
-            <div className="flex flex-col gap-5">
-              {/* Age Band */}
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="age-band-select" className="text-sm font-medium text-[#242b33]">
-                  Age band
-                </label>
-                <div className="relative">
-                  <select
-                    id="age-band-select"
-                    value={ageBand}
-                    onChange={(e) => { setAgeBand(e.target.value); setOccupationType(""); }}
-                    className="w-full appearance-none bg-white rounded-[12px] px-4 py-3.5 text-sm sm:text-base text-[#242b33] outline-none focus:ring-2 focus:ring-[#0073f3] transition-all pr-10 cursor-pointer"
-                  >
-                    <option value="">Select an age band</option>
-                    {AGE_BANDS.map((b) => (
-                      <option key={b.value} value={b.value}>
-                        {b.label}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 size-5 text-[#6e8298] pointer-events-none" />
-                </div>
-              </div>
-
-              {/* Sex (Segmented Radio Group) */}
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-[#242b33]">
-                  Sex
-                </label>
-                <div className="grid grid-cols-2 gap-2.5">
-                  {[
-                    { value: "female", label: "Female" },
-                    { value: "male", label: "Male" },
-                  ].map((opt) => {
-                    const isSelected = sex === opt.value;
-                    return (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => setSex(opt.value)}
-                        className={cn(
-                          "h-[48px] rounded-[12px] px-4 font-medium text-sm sm:text-base flex items-center justify-center gap-2.5 border transition-all cursor-pointer",
-                          isSelected
-                            ? "bg-[#0073f3] text-white border-[#0073f3] shadow-sm"
-                            : "bg-white text-[#242b33] border-[#e4e8ec] hover:bg-[#fafafa]"
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            "size-2 rounded-full",
-                            isSelected ? "bg-white" : "bg-[#c2cdd8]"
-                          )}
-                        />
-                        {opt.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Pregnancy Status (Segmented Radio Group - conditionally rendered when sex === 'female') */}
-              {sex === "female" && (
-                <div className="flex flex-col gap-2 transition-all">
-                  <label className="text-sm font-medium text-[#242b33]">
-                    Pregnancy status
-                  </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {[
-                      { value: "not_pregnant", label: "Not pregnant" },
-                      { value: "pregnant", label: "Pregnant" },
-                      { value: "postpartum", label: "Postpartum" },
-                      { value: "unknown", label: "Unknown" },
-                    ].map((opt) => {
-                      const isSelected = pregnancyStatus === opt.value;
-                      return (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          onClick={() => setPregnancyStatus(opt.value)}
-                          className={cn(
-                            "h-[44px] rounded-[12px] px-2.5 font-medium text-xs sm:text-sm flex items-center justify-center border transition-all cursor-pointer text-center",
-                            isSelected
-                              ? "bg-[#0073f3] text-white border-[#0073f3] shadow-sm"
-                              : "bg-white text-[#242b33] border-[#e4e8ec] hover:bg-[#fafafa]"
-                          )}
-                        >
-                          {opt.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Occupation Type (Searchable — hidden for 0–14 age bands) */}
-              {!CHILD_AGE_BANDS.has(ageBand) && (
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-[#242b33]">
-                    Occupation type
-                  </label>
-                  <SearchableSelect
-                    options={OCCUPATION_TYPES}
-                    value={occupationType}
-                    onChange={setOccupationType}
-                    placeholder="Select an occupation"
-                    searchPlaceholder="Search occupation (e.g. Farmer, Trader)..."
-                  />
-                </div>
-              )}
-
-              {/* Policy Consent Checkbox */}
+            {onGenerateNewCode && (
               <button
                 type="button"
-                id="policy-consent-btn"
-                onClick={() => setPolicyConsent(!policyConsent)}
-                className="flex items-center gap-3 text-left pt-2 cursor-pointer"
+                onClick={onGenerateNewCode}
+                className="px-3 py-1.5 rounded-[10px] bg-white border border-[#c4e4dc] text-[#1a3a34] text-[13px] font-semibold hover:bg-[#f6faf8] transition-colors cursor-pointer shadow-sm"
               >
-                <div
-                  className={cn(
-                    "size-5 rounded-[4px] flex items-center justify-center transition-colors shrink-0",
-                    policyConsent
-                      ? "bg-[#0073f3] text-white"
-                      : "border border-[#c7d2de] bg-white"
-                  )}
-                >
-                  {policyConsent && <Check className="size-3.5 stroke-[3]" />}
-                </div>
-                <span className="text-xs sm:text-sm text-[#6e8298]">
-                  I consent to the processing of my personal data in accordance with
-                  EHA Clinics{" "}
-                  <span className="text-[#0073f3] underline">Privacy Policy</span>.
-                </span>
+                Generate new
               </button>
-            </div>
-          )}
+            )}
+          </div>
+        )}
+
+        {/* ── Age ─────────────────────────────────────────────────── */}
+        <div className="flex flex-col gap-2">
+          <FieldLabel label="Age" sub="Years completed" />
+          <input
+            id="age-input"
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={120}
+            value={age}
+            onChange={(e) => setAge(e.target.value)}
+            placeholder="e.g. 29"
+            className="w-full bg-white rounded-[12px] border border-[#e4e8ec] px-4 py-3 text-[15px] text-[#1a1a1a] placeholder:text-[#c7d2de] outline-none focus:ring-2 focus:ring-[#1a8f76] transition-all"
+          />
+        </div>
+
+        {/* ── Sex ─────────────────────────────────────────────────── */}
+        <div className="flex flex-col gap-2">
+          <FieldLabel label="Sex" required />
+          <TileGrid
+            cols={2}
+            value={sex}
+            onChange={(s) => {
+              setSex(s);
+              if (s === "male" && !pregnancy) {
+                setPregnancy("not_pregnant");
+              }
+            }}
+            options={[
+              { value: "female", label: "Female" },
+              { value: "male", label: "Male" },
+              { value: "other_not_stated", label: "Other / not stated" },
+            ]}
+          />
+        </div>
+
+        {/* ── Pregnancy status (matches Sentinel image) ──────────── */}
+        <div className="flex flex-col gap-2">
+          <FieldLabel label="Pregnancy status" sub="For care planning only" />
+          <TileGrid
+            cols={1}
+            value={(pregnancy ?? "") as string}
+            onChange={(v) => setPregnancy(v as DemographicsData["pregnancyStatus"])}
+            options={[
+              { value: "not_pregnant", label: "Not pregnant / not applicable" },
+              { value: "pregnant", label: "Pregnant" },
+              { value: "not_sure", label: "Not sure / prefer not to say" },
+            ]}
+          />
+        </div>
+
+        {/* ── Health Insurance ─────────────────────────────────── */}
+        <div className="flex flex-col gap-2">
+          <FieldLabel label="Health insurance" required />
+          <TileGrid
+            cols={2}
+            value={insurance}
+            onChange={setInsurance}
+            options={[
+              { value: "no_insurance", label: "No insurance" },
+              { value: "nhia_or_other", label: "NHIA / other cover" },
+            ]}
+          />
+        </div>
+
+        {/* ── Distance ─────────────────────────────────────────── */}
+        <div className="flex flex-col gap-2">
+          <FieldLabel label="Distance" sub="Approximate travel from this outlet" required />
+          <TileGrid
+            cols={2}
+            value={distance}
+            onChange={setDistance}
+            options={[
+              { value: "under_2km", label: "Under 2 km" },
+              { value: "2_5km", label: "2–5 km" },
+              { value: "over_5km", label: "Over 5 km" },
+            ]}
+          />
+        </div>
+
+        {/* ── Education ────────────────────────────────────────── */}
+        <div className="flex flex-col gap-2">
+          <FieldLabel label="Education" required />
+          <TileGrid
+            cols={2}
+            value={education}
+            onChange={setEducation}
+            options={[
+              { value: "none_primary", label: "None / primary" },
+              { value: "secondary", label: "Secondary" },
+              { value: "tertiary", label: "Tertiary" },
+            ]}
+          />
+        </div>
+
+        {/* ── Occupation ───────────────────────────────────────── */}
+        <div className="flex flex-col gap-2">
+          <FieldLabel label="Occupation" required />
+          <TileGrid
+            cols={2}
+            value={occupation}
+            onChange={setOccupation}
+            options={[
+              { value: "trader", label: "Trader" },
+              { value: "farmer", label: "Farmer" },
+              { value: "student", label: "Student" },
+              { value: "other", label: "Other" },
+            ]}
+          />
+        </div>
+
+        {/* ── Visit type ───────────────────────────────────────── */}
+        <div className="flex flex-col gap-2">
+          <FieldLabel label="Visit type" required />
+          <TileGrid
+            cols={2}
+            value={visitType}
+            onChange={setVisitType}
+            options={[
+              { value: "first_visit", label: "First visit" },
+              { value: "follow_up", label: "Follow-up" },
+            ]}
+          />
         </div>
       </div>
 
-      {/* Bottom Actions Bar - fixed to bottom on mobile */}
-      <div className="w-full flex items-center justify-between pt-2 sm:static fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-gray-100 sm:border-0 sm:p-0 sm:bg-transparent z-40">
-        <div className="bg-[#f9f3ff] px-4 py-2.5 rounded-full inline-flex items-center">
-          <span className="text-[#9175a7] text-sm sm:text-base font-medium">
-            Pre-Screening
-          </span>
-        </div>
+      {/* ── Bottom bar — fixed ───────────────────────────────────── */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-between gap-3 px-5 py-4 bg-[#f2f3f0] border-t border-[#e4e8ec]">
+        {onPrevious ? (
+          <button
+            type="button"
+            onClick={onPrevious}
+            className="size-11 rounded-full bg-white border border-[#e4e8ec] text-[#6e8298] flex items-center justify-center hover:bg-[#f9f9f9] transition-colors cursor-pointer"
+            aria-label="Go back"
+          >
+            ←
+          </button>
+        ) : (
+          <div />
+        )}
         <button
           type="button"
-          id="continue-demographics-btn"
+          id="demographics-continue-btn"
           onClick={handleContinue}
-          className="rounded-[12px] bg-[#0073f3] hover:bg-[#0060cb] text-white px-8 py-3.5 text-sm sm:text-base font-medium transition-colors cursor-pointer shadow-sm"
+          className="flex-1 max-w-xs h-12 rounded-[14px] bg-[#1a3a34] hover:bg-[#142e28] text-white font-semibold text-[15px] transition-colors cursor-pointer"
         >
-          {privacyMode === "identified" ? "Continue" : "Continue to screening"}
+          Continue
         </button>
       </div>
     </div>

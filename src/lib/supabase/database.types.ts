@@ -202,9 +202,15 @@ export interface Database {
         {
           encounter_id: string;
           age_band: string;
+          age_exact: number | null;
           sex: "female" | "male" | "intersex" | "unknown";
+          sex_other: boolean;
           pregnancy_status: string | null;
           occupation_type: string;
+          insurance_status: "no_insurance" | "nhia_or_other" | null;
+          distance_from_outlet: "under_2km" | "2_5km" | "over_5km" | null;
+          education_level: "none_primary" | "secondary" | "tertiary" | null;
+          visit_type: "first_visit" | "follow_up" | null;
           full_name: string | null;
           phone_e164: string | null;
           patient_code: string | null;
@@ -213,9 +219,15 @@ export interface Database {
         {
           encounter_id: string;
           age_band: string;
+          age_exact?: number | null;
           sex: "female" | "male" | "intersex" | "unknown";
+          sex_other?: boolean;
           pregnancy_status?: string | null;
           occupation_type: string;
+          insurance_status?: "no_insurance" | "nhia_or_other" | null;
+          distance_from_outlet?: "under_2km" | "2_5km" | "over_5km" | null;
+          education_level?: "none_primary" | "secondary" | "tertiary" | null;
+          visit_type?: "first_visit" | "follow_up" | null;
           full_name?: string | null;
           phone_e164?: string | null;
           patient_code?: string | null;
@@ -747,6 +759,40 @@ export interface Database {
           occurred_at: string;
         },
         never
+      >;
+      daily_reports: Table<
+        {
+          id: string;
+          facility_id: string;
+          clinician_id: string;
+          report_date: string;
+          status: "no_cases" | "no_report" | "no_report_auto" | "encounter";
+          is_auto_recorded: boolean;
+          needs_follow_up: boolean;
+          set_at: string;
+          updated_at: string;
+        },
+        {
+          id?: string;
+          facility_id: string;
+          clinician_id: string;
+          report_date: string;
+          status: "no_cases" | "no_report" | "no_report_auto" | "encounter";
+          is_auto_recorded?: boolean;
+          needs_follow_up?: boolean;
+          set_at?: string;
+          updated_at?: string;
+        },
+        Partial<{
+          facility_id: string;
+          clinician_id: string;
+          report_date: string;
+          status: "no_cases" | "no_report" | "no_report_auto" | "encounter";
+          is_auto_recorded: boolean;
+          needs_follow_up: boolean;
+          set_at: string;
+          updated_at: string;
+        }>
       >;
     };
     Views: Record<string, never>;

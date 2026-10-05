@@ -1,11 +1,21 @@
 "use client";
 
-import { ArrowRight, X } from "lucide-react";
+import { ArrowRight, ShieldAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { TriageSeverity } from "@/lib/supabase/database.types";
 
+/**
+ * AC6 — Final screen:
+ *  - Shows the Suspected Disease Category derived from selected symptoms.
+ *  - Shows the mandatory disclaimer: "This is not a diagnosis."
+ *  - Shows no syndrome match message when category is not identified.
+ *
+ * AC7 — Confirm Referral generates a unique referral code displayed on screen.
+ */
+
 interface TriageBottomSheetProps {
   severity: TriageSeverity;
+  /** The suspected disease category returned by the backend algorithm */
   conditionLabel: string;
   guidanceText: string;
   ipcGuidance?: string | null;
@@ -27,6 +37,15 @@ export function TriageBottomSheet({
   const isUrgent = severity === "urgent";
   const isRoutine = severity === "routine" || severity === "none";
 
+  // AC6 — No syndrome match edge case
+  const hasMatch =
+    conditionLabel &&
+    conditionLabel !== "Clinical Assessment" &&
+    conditionLabel !== "No specific category identified";
+
+  const displayCategory =
+    hasMatch ? conditionLabel : "No specific category identified";
+
   return (
     <div
       className={cn(
@@ -38,11 +57,23 @@ export function TriageBottomSheet({
           : "bg-white"
       )}
     >
+      {/* Eyebrow label */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-semibold uppercase tracking-wider text-[#6e8298]">
+          Suspected Disease Category
+        </span>
+        {/* AC6 — Mandatory disclaimer */}
+        <span className="bg-[#fff1ed] text-[#d4583b] text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full flex items-center gap-1 shrink-0">
+          <ShieldAlert className="size-3" />
+          This is not a diagnosis.
+        </span>
+      </div>
+
       {/* Top Header Row */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex flex-wrap items-center gap-3">
           <h2 className="text-xl sm:text-2xl font-semibold text-[#242b33]">
-            {conditionLabel || (isEmergency ? "Suspected Cholera" : isUrgent ? "Severe Malaria" : "Uncomplicated Malaria")}
+            {displayCategory}
           </h2>
           <span
             className={cn(
@@ -65,31 +96,36 @@ export function TriageBottomSheet({
             aria-label="Close"
             className="size-8 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors shrink-0 text-[#a1aebc] hover:text-[#242b33]"
           >
-            <X className="size-5" />
+            ×
           </button>
         )}
       </div>
 
       {/* Main Guidance Text */}
-      <p
-        className={cn(
-          "text-base sm:text-lg leading-relaxed",
-          isEmergency
-            ? "text-[#a03823]"
-            : isUrgent
-            ? "text-[#92400e]"
-            : "text-[#334155]"
-        )}
-      >
-        {guidanceText ||
-          (isEmergency
-            ? "Immediate isolation required. Begin oral rehydration therapy immediately. Refer to nearest secondary health facility."
-            : isUrgent
-            ? "Administer pre-referral artesunate suppository or IM artesunate. Refer immediately."
-            : "Treat with Artemisinin-based Combination Therapy (ACT) for 3 days. Advise on bed net usage.")}
-      </p>
+      {guidanceText && (
+        <p
+          className={cn(
+            "text-base sm:text-lg leading-relaxed",
+            isEmergency
+              ? "text-[#a03823]"
+              : isUrgent
+              ? "text-[#92400e]"
+              : "text-[#334155]"
+          )}
+        >
+          {guidanceText}
+        </p>
+      )}
 
-      {/* IPC Guidance Container (Figma 0:3050 for Emergency) */}
+      {/* No match guidance */}
+      {!hasMatch && (
+        <p className="text-sm text-[#6e8298] leading-relaxed bg-[#f2f3f5] rounded-[12px] px-4 py-3">
+          The selected symptoms did not match a specific IDSR category. You can
+          still generate a referral for clinical review.
+        </p>
+      )}
+
+      {/* IPC Guidance Container (for Emergency) */}
       {isEmergency && ipcGuidance && (
         <div className="bg-[#fff5f2] rounded-[16px] p-5 flex flex-col gap-1.5">
           <span className="font-semibold text-sm sm:text-base text-[#242b33]">
@@ -101,30 +137,54 @@ export function TriageBottomSheet({
         </div>
       )}
 
+      {/* Disclaimer block (prominent) */}
+      <div className="bg-[#fff8f6] border border-[#ffd5c8] rounded-[12px] px-4 py-3 flex items-center gap-2">
+        <ShieldAlert className="size-4 text-[#d4583b] shrink-0" />
+        <p className="text-sm text-[#a03823] font-medium leading-snug">
+          This is not a diagnosis. Confirm the suspected category with a qualified health worker.
+          <br />
+          <span className="text-xs font-normal text-[#c75b40]">
+            Wannan ba ganewar asali ba ne. Tabbatar da rukunin da ake zargi tare da ma&apos;aikacin lafiya mai cancanta.
+          </span>
+        </p>
+      </div>
+
       {/* Bottom Action Button */}
       <div className="pt-2">
         {!isRoutine ? (
           <button
             type="button"
+            id="confirm-referral-btn"
             onClick={onConfirmReferral}
             className={cn(
-              "inline-flex items-center gap-2 px-6 py-3.5 rounded-[12px] text-sm sm:text-base font-medium transition-colors cursor-pointer border",
+              "w-full inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-[12px] text-sm sm:text-base font-medium transition-colors cursor-pointer",
               isEmergency
-                ? "border-[#d4583b] text-[#d4583b] hover:bg-[#fff5f2]"
-                : "border-[#d97706] text-[#b45309] hover:bg-[#fffbeb]"
+                ? "bg-[#e05338] hover:bg-[#c9432a] text-white"
+                : "bg-[#f59e0b] hover:bg-[#d97706] text-white"
             )}
           >
-            <span>Confirm referral</span>
+            <span>Confirm Referral</span>
             <ArrowRight className="size-4" />
           </button>
         ) : (
-          <button
-            type="button"
-            onClick={onCompleteRoutine || onConfirmReferral}
-            className="rounded-[12px] bg-[#0073f3] hover:bg-[#0060cb] text-white px-8 py-3.5 text-sm sm:text-base font-medium transition-colors cursor-pointer"
-          >
-            Complete assessment
-          </button>
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              id="confirm-referral-btn"
+              onClick={onConfirmReferral}
+              className="w-full inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-[12px] text-sm sm:text-base font-medium transition-colors cursor-pointer border border-[#0073f3] text-[#0073f3] hover:bg-[#f0f7ff]"
+            >
+              <span>Confirm Referral</span>
+              <ArrowRight className="size-4" />
+            </button>
+            <button
+              type="button"
+              onClick={onCompleteRoutine || onConfirmReferral}
+              className="w-full rounded-[12px] bg-[#0073f3] hover:bg-[#0060cb] text-white px-8 py-3.5 text-sm sm:text-base font-medium transition-colors cursor-pointer"
+            >
+              Complete assessment
+            </button>
+          </div>
         )}
       </div>
     </div>

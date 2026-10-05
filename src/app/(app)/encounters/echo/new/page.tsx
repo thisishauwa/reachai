@@ -1,75 +1,99 @@
 "use client";
 
 import { useCallback, useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSession } from "@/lib/session/session-context";
 import { createClient } from "@/lib/supabase/client";
 import { syncController } from "@/lib/offline/sync";
 import { db } from "@/lib/offline/db";
-import { generateEncounterCode, generateSessionCode, generatePatientCode } from "@/lib/reference/codes";
+import {
+  generateEncounterCode,
+  generateSessionCode,
+} from "@/lib/reference/codes";
 import { useActiveConsentText } from "@/lib/queries/reference";
-import { usePatient } from "@/lib/queries/patients";
 import { EncounterHeader } from "@/components/echo/encounter-header";
 import { StepConsent } from "@/components/echo/step-consent";
-import { StepDemographics } from "@/components/echo/step-demographics";
+import { StepDemographics, type DemographicsData } from "@/components/echo/step-demographics";
 import { StepSyndrome } from "@/components/echo/step-syndrome";
 import { StepQuestions } from "@/components/echo/step-questions";
 import { StepTriage } from "@/components/echo/step-triage";
 import { StepReferral } from "@/components/echo/step-referral";
 import { EncounterCompletedModal } from "@/components/echo/encounter-completed-modal";
-import {
-  INITIAL_ECHO_STATE,
-  type EchoEncounterState,
-} from "@/components/echo/types";
-import type { PrivacyMode } from "@/lib/supabase/database.types";
+import { useZeroReport } from "@/lib/session/use-zero-report";
+import type { TriageSeverity } from "@/lib/supabase/database.types";
+
+/**
+ * AC1 — No second consent step, no Identified Patient option, no Create New
+ *        Patient button. Anonymous mode is the only path.
+ *
+ * Flow: consent → demographics → symptom-entry → questions → triage → referral → complete
+ */
+
+type EchoStep =
+  | "privacy"
+  | "setup"
+  | "syndrome"
+  | "questions"
+  | "triage"
+  | "referral"
+  | "complete";
+
+interface EchoEncounterState {
+  step: EchoStep;
+  encounterId: string | null;
+  sessionCode: string | null;
+  consentId: string | null;
+  locale: "en" | "ha";
+  /** Selected individual symptom codes */
+  symptomCodes: string[];
+  /** Derived IDSR syndrome IDs (sent to backend) */
+  syndromeIds: string[];
+  syndromeLabels: string[];
+  questionSetId: string | null;
+  answers: Record<string, unknown>;
+  triageOutcomeId: string | null;
+  triageSeverity: TriageSeverity | null;
+  triageGuidanceEn: string | null;
+  triageIpcGuidanceEn: string | null;
+  referralRequired: boolean;
+}
+
+const INITIAL_STATE: EchoEncounterState = {
+  step: "privacy",
+  encounterId: null,
+  sessionCode: null,
+  consentId: null,
+  locale: "en",
+  symptomCodes: [],
+  syndromeIds: [],
+  syndromeLabels: [],
+  questionSetId: null,
+  answers: {},
+  triageOutcomeId: null,
+  triageSeverity: null,
+  triageGuidanceEn: null,
+  triageIpcGuidanceEn: null,
+  referralRequired: false,
+};
 
 export default function NewEchoEncounterPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { activeFacility, userId } = useSession();
-  const [state, setState] = useState<EchoEncounterState>(INITIAL_ECHO_STATE);
+  const { setHasEncounterToday } = useZeroReport();
+  const [state, setState] = useState<EchoEncounterState>(INITIAL_STATE);
   const [encounterCode] = useState(() => generateEncounterCode());
+  const [sessionCode, setSessionCode] = useState(() => generateSessionCode());
   const [completing, setCompleting] = useState(false);
 
-  const urlPatientId = searchParams.get("patientId");
-  const { data: preloadedPatient } = usePatient(urlPatientId || undefined);
-
-  useEffect(() => {
-    if (preloadedPatient && !state.patientId) {
-      setState((s) => ({
-        ...s,
-        patientId: preloadedPatient.id,
-        patientName: preloadedPatient.full_name,
-        privacyMode: "identified",
-        patientCreatedAt: new Date(preloadedPatient.created_at).toLocaleDateString("en-GB", {
-          day: "numeric",
-          month: "short",
-          year: "numeric",
-        }),
-      }));
-    }
-  }, [preloadedPatient, state.patientId]);
-
-  // Consent info collected in step 1
-  const [consentData, setConsentData] = useState<{
-    locale: "en" | "ha";
-    verbalAttested?: boolean;
-    signatureMethod?: "type" | "draw";
-    signatureText?: string;
-  }>({ locale: "en" });
-
-  const { data: identifiedConsentText } = useActiveConsentText("identified_referral");
   const { data: anonConsentText } = useActiveConsentText("anonymous_screening");
 
+  // ── Consent record helper ──────────────────────────────────────────────
   async function saveConsentRecord(
     encounterId: string,
     consentId: string,
-    kind: "identified_referral" | "anonymous_screening",
-    methodType: "draw" | "type" | "verbal",
-    signatureText?: string,
     textVersionId?: string | null
   ) {
     const supabase = createClient();
@@ -78,39 +102,29 @@ export default function NewEchoEncounterPage() {
       const { data: ver } = await supabase
         .from("consent_text_versions")
         .select("id")
-        .eq("kind", kind)
+        .eq("kind", "anonymous_screening")
         .order("version", { ascending: false })
         .limit(1)
         .maybeSingle();
       verId = ver?.id || "00000000-0000-0000-0000-000000000001";
     }
 
-    let dbMethod: "drawn_signature" | "typed_signature" | "verbal_attestation" = "verbal_attestation";
-    if (methodType === "draw") dbMethod = "drawn_signature";
-    else if (methodType === "type") dbMethod = "typed_signature";
-
     const consentPayload: Record<string, unknown> = {
       id: consentId,
       encounter_id: encounterId,
       text_version_id: verId,
-      kind,
-      method: dbMethod,
+      kind: "anonymous_screening",
+      method: "verbal_attestation",
+      clinician_attested_by: userId,
     };
 
-    if (dbMethod === "verbal_attestation") {
-      consentPayload.clinician_attested_by = userId;
-    } else if (dbMethod === "typed_signature") {
-      consentPayload.typed_signer_name = signatureText || "Patient";
-    } else if (dbMethod === "drawn_signature") {
-      consentPayload.signature_storage_path = `signatures/${consentId}.png`;
-    }
-
     try {
-      await supabase.from("consents").upsert(consentPayload as never, { onConflict: "id" });
+      await supabase
+        .from("consents")
+        .upsert(consentPayload as never, { onConflict: "id" });
     } catch (e) {
       console.warn("Direct consent upsert note:", e);
     }
-
     try {
       await syncController.enqueue("consent", consentId, "insert", consentPayload);
     } catch (e) {
@@ -118,176 +132,131 @@ export default function NewEchoEncounterPage() {
     }
   }
 
-  async function handleDemographicsComplete(data: {
-    fullName?: string;
-    phone?: string;
-    ageBand: string;
-    sex?: string;
-    pregnancyStatus?: string | null;
-    occupationType: string;
-    existingPatientId?: string;
+  // ── Step 1 → 2: Consent accepted ──────────────────────────────────────
+  async function handleConsentComplete(data: {
+    locale: "en" | "ha";
+    verbalAttested: boolean;
   }) {
-    if (state.privacyMode === "identified") {
-      let patientId = data.existingPatientId || state.patientId || crypto.randomUUID();
-      let patientName = data.fullName || state.patientName || "Patient";
-      const encounterId = crypto.randomUUID();
-      const consentId = crypto.randomUUID();
-
-      try {
-        let patientCode = generatePatientCode();
-        if (!data.existingPatientId && !state.patientId) {
-          const patientPayload = {
-            id: patientId,
-            organization_id: activeFacility.organizationId,
-            facility_id: activeFacility.facilityId,
-            patient_code: patientCode,
-            full_name: data.fullName!,
-            phone_e164: data.phone || null,
-            age_band: data.ageBand,
-            sex: (data.sex || "unknown") as "female" | "male" | "intersex" | "unknown",
-            pregnancy_status: data.pregnancyStatus || null,
-            occupation_type: data.occupationType,
-            created_by: userId,
-          };
-          const supabase = createClient();
-          await supabase.from("patients").upsert(patientPayload, { onConflict: "id" });
-          await syncController.enqueue("patient", patientId, "insert", patientPayload);
-        }
-
-        const encounterPayload = {
-          id: encounterId,
-          organization_id: activeFacility.organizationId,
-          facility_id: activeFacility.facilityId,
-          clinician_id: userId,
-          patient_id: patientId,
-          encounter_code: encounterCode,
-          session_code: null,
-          workflow_mode: "echo" as const,
-          privacy_mode: "identified" as const,
-          status: "in_progress" as const,
-        };
-
-        const supabase = createClient();
-        await supabase.from("encounters").upsert(encounterPayload, { onConflict: "id" });
-        await syncController.enqueue("encounter", encounterId, "insert", encounterPayload);
-
-        // Snapshot demographics for the encounter
-        const demographicsPayload = {
-          encounter_id: encounterId,
-          age_band: data.ageBand,
-          sex: (data.sex || "unknown") as "female" | "male" | "intersex" | "unknown",
-          pregnancy_status: data.pregnancyStatus || null,
-          occupation_type: data.occupationType,
-          full_name: patientName,
-          phone_e164: data.phone || null,
-          patient_code: patientCode,
-        };
-        try {
-          await supabase.from("encounter_demographics").upsert(demographicsPayload, { onConflict: "encounter_id" });
-        } catch (demoErr) {
-          console.warn("Direct encounter_demographics upsert note:", demoErr);
-        }
-
-        // Save consent
-        await saveConsentRecord(
-          encounterId,
-          consentId,
-          "identified_referral",
-          consentData.signatureMethod === "draw" ? "draw" : "type",
-          consentData.signatureText,
-          identifiedConsentText?.id
-        );
-      } catch (err) {
-        console.warn("Demographics complete note:", err);
-      }
-
-      setState((s) => ({
-        ...s,
-        encounterId,
-        patientId,
-        patientName,
-        patientCreatedAt: new Date().toLocaleDateString("en-GB", {
-          day: "numeric",
-          month: "short",
-          year: "numeric",
-        }),
-        consentId,
-        step: "syndrome",
-      }));
-    } else {
-      // Anonymous mode
-      const sessionCode = generateSessionCode();
-      const encounterId = crypto.randomUUID();
-      const consentId = crypto.randomUUID();
-
-      try {
-        const encounterPayload = {
-          id: encounterId,
-          organization_id: activeFacility.organizationId,
-          facility_id: activeFacility.facilityId,
-          clinician_id: userId,
-          patient_id: null,
-          encounter_code: encounterCode,
-          session_code: sessionCode,
-          workflow_mode: "echo" as const,
-          privacy_mode: "anonymous" as const,
-          status: "in_progress" as const,
-        };
-
-        const supabase = createClient();
-        await supabase.from("encounters").upsert(encounterPayload, { onConflict: "id" });
-        await syncController.enqueue("encounter", encounterId, "insert", encounterPayload);
-
-        // Save anonymous verbal consent
-        await saveConsentRecord(
-          encounterId,
-          consentId,
-          "anonymous_screening",
-          "verbal",
-          undefined,
-          anonConsentText?.id
-        );
-      } catch (err) {
-        console.warn("Anonymous encounter init note:", err);
-      }
-
-      setState((s) => ({
-        ...s,
-        encounterId,
-        sessionCode,
-        consentId,
-        isAnonymous: true,
-        step: "syndrome",
-      }));
-    }
+    setState((s) => ({ ...s, locale: data.locale, step: "setup" }));
   }
 
+  // ── Step 2 → 3: Demographics complete ─────────────────────────────────
+  async function handleDemographicsComplete(data: DemographicsData) {
+    const encounterId = crypto.randomUUID();
+    const consentId = crypto.randomUUID();
+
+    try {
+      const encounterPayload = {
+        id: encounterId,
+        organization_id: activeFacility.organizationId,
+        facility_id: activeFacility.facilityId,
+        clinician_id: userId,
+        patient_id: null,
+        encounter_code: encounterCode,
+        session_code: sessionCode,
+        workflow_mode: "echo" as const,
+        privacy_mode: "anonymous" as const,
+        status: "in_progress" as const,
+      };
+
+      const supabase = createClient();
+      await supabase
+        .from("encounters")
+        .upsert(encounterPayload, { onConflict: "id" });
+      await syncController.enqueue(
+        "encounter",
+        encounterId,
+        "insert",
+        encounterPayload
+      );
+
+      // Snapshot demographics for the encounter (all new fields)
+      const demoPayload = {
+        encounter_id: encounterId,
+        // age_band kept for backward compat — derive a band from exact age
+        age_band: data.ageExact
+          ? data.ageExact < 5
+            ? "0_4"
+            : data.ageExact < 15
+            ? "5_14"
+            : data.ageExact < 25
+            ? "15_24"
+            : data.ageExact < 50
+            ? "25_49"
+            : "50_plus"
+          : "unknown",
+        age_exact: data.ageExact ?? null,
+        sex: data.sex === "other_not_stated"
+          ? ("unknown" as const)
+          : (data.sex as "female" | "male" | "intersex" | "unknown"),
+        sex_other: data.sex === "other_not_stated",
+        pregnancy_status: data.pregnancyStatus ?? null,
+        occupation_type: data.occupationType,
+        insurance_status: data.insuranceStatus,
+        distance_from_outlet: data.distanceFromOutlet,
+        education_level: data.educationLevel,
+        visit_type: data.visitType,
+      };
+
+      try {
+        await supabase
+          .from("encounter_demographics")
+          .upsert(demoPayload as never, { onConflict: "encounter_id" });
+      } catch (demoErr) {
+        console.warn("encounter_demographics upsert note:", demoErr);
+      }
+
+      await syncController.enqueue(
+        "encounter_demographics",
+        encounterId,
+        "insert",
+        demoPayload
+      );
+
+      // Save verbal consent
+      await saveConsentRecord(encounterId, consentId, anonConsentText?.id);
+
+      // AC8 edge case: logging an encounter replaces the zero report
+      setHasEncounterToday();
+    } catch (err) {
+      console.warn("Demographics complete note:", err);
+    }
+
+    setState((s) => ({
+      ...s,
+      encounterId,
+      sessionCode,
+      consentId,
+      step: "syndrome",
+    }));
+  }
+
+  // ── Complete encounter ─────────────────────────────────────────────────
   async function completeEncounter(encounterId: string) {
     setCompleting(true);
     try {
       const completedAt = new Date().toISOString();
       const supabase = createClient();
 
-      // 1. Try security-definer complete_encounter RPC first, fallback to direct update
-      const { error: rpcError } = await supabase.rpc("complete_encounter" as never, {
-        p_encounter_id: encounterId,
-      } as never);
+      const { error: rpcError } = await supabase.rpc(
+        "complete_encounter" as never,
+        { p_encounter_id: encounterId } as never
+      );
 
       if (rpcError) {
         const { error: updateError } = await supabase
           .from("encounters")
-          .update({
-            status: "completed",
-            completed_at: completedAt,
-          })
+          .update({ status: "completed", completed_at: completedAt })
           .eq("id", encounterId);
 
-        if (updateError && !updateError.message?.includes("Completed encounters are immutable")) {
+        if (
+          updateError &&
+          !updateError.message?.includes("Completed encounters are immutable")
+        ) {
           console.warn("Direct encounters update note:", updateError);
         }
       }
 
-      // 2. Clear / mark completed in local Dexie so background sync does not re-attempt an immutable encounter
       try {
         await db.draftEncounters.update(encounterId, { status: "completed" });
         const pendingForEncounter = await db.outbox
@@ -303,9 +272,10 @@ export default function NewEchoEncounterPage() {
         console.warn("Dexie local update note:", dexieErr);
       }
 
-      // 3. Background sync flush
       try {
-        syncController.flush().catch((e) => console.warn("Background sync note:", e));
+        syncController.flush().catch((e) =>
+          console.warn("Background sync note:", e)
+        );
       } catch {}
 
       await queryClient.invalidateQueries({ queryKey: ["encounters"] });
@@ -315,7 +285,6 @@ export default function NewEchoEncounterPage() {
     } catch (err) {
       console.error("Failed to complete encounter:", err);
       await queryClient.invalidateQueries({ queryKey: ["encounters"] });
-      await queryClient.invalidateQueries({ queryKey: ["referrals"] });
       toast.success("Encounter completed");
       router.push("/home");
     } finally {
@@ -333,12 +302,7 @@ export default function NewEchoEncounterPage() {
           } else if (state.step === "setup") {
             setState((s) => ({ ...s, step: "privacy" }));
           } else if (state.step === "syndrome") {
-            // If patient was preloaded (no setup step), go back to privacy; otherwise go to setup
-            if (state.patientId && !state.encounterId) {
-              setState((s) => ({ ...s, step: "privacy" }));
-            } else {
-              setState((s) => ({ ...s, step: "setup" }));
-            }
+            setState((s) => ({ ...s, step: "setup" }));
           } else if (state.step === "questions") {
             setState((s) => ({ ...s, step: "syndrome" }));
           } else if (state.step === "triage") {
@@ -349,112 +313,57 @@ export default function NewEchoEncounterPage() {
         }}
       />
 
-      {/* Step 1: Consent (Figma 0:3730 & 0:1794) */}
+      {/* Step 1 — AC1: Anonymous-only consent */}
       {state.step === "privacy" && (
-        <StepConsent
-          initialMode={state.privacyMode ?? "identified"}
-          onContinue={async ({ privacyMode, locale, verbalAttested, signatureMethod, signatureText }) => {
-            setConsentData({ locale, verbalAttested, signatureMethod, signatureText });
-
-            if (privacyMode === "identified" && state.patientId) {
-              // Preloaded patient from URL: create encounter immediately and proceed to syndrome
-              const encounterId = crypto.randomUUID();
-              const consentId = crypto.randomUUID();
-              const encPayload = {
-                id: encounterId,
-                organization_id: activeFacility.organizationId,
-                facility_id: activeFacility.facilityId,
-                clinician_id: userId,
-                patient_id: state.patientId,
-                encounter_code: encounterCode,
-                session_code: null,
-                workflow_mode: "echo" as const,
-                privacy_mode: "identified" as const,
-                status: "in_progress" as const,
-              };
-
-              const supabase = createClient();
-              await supabase.from("encounters").upsert(encPayload, { onConflict: "id" });
-              await syncController.enqueue("encounter", encounterId, "insert", encPayload);
-
-              await saveConsentRecord(
-                encounterId,
-                consentId,
-                "identified_referral",
-                signatureMethod === "draw" ? "draw" : "type",
-                signatureText,
-                identifiedConsentText?.id
-              );
-
-              setState((s) => ({
-                ...s,
-                encounterId,
-                consentId,
-                privacyMode,
-                locale,
-                step: "syndrome",
-              }));
-            } else {
-              setState((s) => ({
-                ...s,
-                privacyMode,
-                locale,
-                step: "setup",
-              }));
-            }
-          }}
-        />
+        <StepConsent onContinue={handleConsentComplete} />
       )}
 
-      {/* Step 2: Demographics (Figma 0:3800, 0:1855, 0:1905) */}
-      {state.step === "setup" && state.privacyMode && (
+      {/* Step 2 — AC2: Demographics with insurance, distance, visit type */}
+      {state.step === "setup" && (
         <StepDemographics
-          privacyMode={state.privacyMode}
+          sessionCode={sessionCode}
+          onGenerateNewCode={() => setSessionCode(generateSessionCode())}
           onContinue={handleDemographicsComplete}
+          onPrevious={() => setState((s) => ({ ...s, step: "privacy" }))}
         />
       )}
 
-      {/* Step 3: Syndrome / Chief Complaint */}
+      {/* Step 3 — AC3: Individual symptom tiles + AC4: IDSR category for unusual */}
       {state.step === "syndrome" && state.encounterId && (
         <StepSyndrome
-          encounterCode={encounterCode}
-          patientName={state.patientName ?? "Patient"}
-          patientCreatedAt={state.patientCreatedAt ?? new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-          isAnonymous={state.privacyMode === "anonymous"}
           sessionCode={state.sessionCode ?? undefined}
           onPrevious={() => setState((s) => ({ ...s, step: "setup" }))}
-          onSelect={(ids, labels) =>
+          onSelect={(symptomCodes, syndromeIds, labels) =>
             setState((s) => ({
               ...s,
-              syndromeIds: ids,
+              symptomCodes,
+              syndromeIds,
               syndromeLabels: labels,
-              syndromeId: ids[0] ?? null,
-              syndromeLabel: labels[0] ?? null,
               step: "questions",
             }))
           }
         />
       )}
 
-      {/* Step 4: Questions — flat single page for all selected syndromes */}
-      {state.step === "questions" && state.encounterId && state.syndromeIds.length > 0 && (
-        <StepQuestions
-          syndromeIds={state.syndromeIds}
-          syndromeLabels={state.syndromeLabels}
-          encounterId={state.encounterId}
-          encounterCode={encounterCode}
-          patientName={state.patientName ?? "Patient"}
-          patientCreatedAt={state.patientCreatedAt ?? new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-          isAnonymous={state.privacyMode === "anonymous"}
-          sessionCode={state.sessionCode ?? undefined}
-          onPrevious={() => setState((s) => ({ ...s, step: "syndrome" }))}
-          onComplete={(questionSetId, answers) =>
-            setState((s) => ({ ...s, questionSetId, answers, step: "triage" }))
-          }
-        />
-      )}
+      {/* Step 4 — AC5: Follow-up questions with severity sub-question */}
+      {state.step === "questions" &&
+        state.encounterId &&
+        state.syndromeIds.length > 0 && (
+          <StepQuestions
+            syndromeIds={state.syndromeIds}
+            syndromeLabels={state.syndromeLabels}
+            encounterId={state.encounterId}
+            encounterCode={encounterCode}
+            isAnonymous
+            sessionCode={state.sessionCode ?? undefined}
+            onPrevious={() => setState((s) => ({ ...s, step: "syndrome" }))}
+            onComplete={(questionSetId, answers) =>
+              setState((s) => ({ ...s, questionSetId, answers, step: "triage" }))
+            }
+          />
+        )}
 
-      {/* Step 5: Triage */}
+      {/* Step 5 — Triage */}
       {state.step === "triage" &&
         state.encounterId &&
         state.syndromeIds.length > 0 &&
@@ -472,34 +381,28 @@ export default function NewEchoEncounterPage() {
                 triageGuidanceEn: outcome.guidanceEn,
                 triageIpcGuidanceEn: outcome.ipcGuidanceEn,
                 referralRequired: outcome.referralRequired,
-                step: outcome.referralRequired ? "referral" : "complete",
+                // Always offer referral regardless of severity (AC6 edge case)
+                step: "referral",
               }))
             }
           />
         )}
 
-      {/* Step 6: Referral */}
-      {state.step === "referral" && state.encounterId && state.privacyMode && (
+      {/* Step 6 — AC6 & AC7: Final screen + referral code */}
+      {state.step === "referral" && state.encounterId && (
         <StepReferral
           encounterId={state.encounterId}
-          privacyMode={state.privacyMode}
-          consentId={
-            state.privacyMode === "identified" ? state.consentId : null
-          }
+          privacyMode="anonymous"
+          consentId={null}
           onComplete={() => setState((s) => ({ ...s, step: "complete" }))}
         />
       )}
 
-      {/* Step 7: Complete (Figma 0:2287) */}
+      {/* Step 7 — Complete */}
       {state.step === "complete" && state.encounterId && (
         <EncounterCompletedModal
-          patientName={
-            state.patientName ??
-            (state.privacyMode === "anonymous"
-              ? "Anonymous patient"
-              : "Patient")
-          }
-          isAnonymous={state.privacyMode === "anonymous"}
+          patientName="Anonymous patient"
+          isAnonymous
           onReturnHome={() => completeEncounter(state.encounterId!)}
         />
       )}
