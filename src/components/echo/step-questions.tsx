@@ -118,27 +118,30 @@ export function StepQuestions({
       return;
     }
 
-    // Build combined answers object with severity included where applicable
-    const combinedAnswers: Record<string, unknown> = {};
+    // Build FLAT answers for triage engine (expects raw "yes"/"no" strings)
+    // Severity answers are inlined as <CODE>_severity = "mild"|"moderate"|"severe"
+    const triageAnswers: Record<string, unknown> = {};
     for (const question of allQuestions) {
       const ans = answers[question.code];
-      combinedAnswers[question.code] = { answer: ans };
+      triageAnswers[question.code] = ans;
       if (ans === "yes" && severityAnswers[question.code]) {
-        combinedAnswers[`${question.code}_severity`] = {
-          answer: severityAnswers[question.code],
-        };
+        triageAnswers[`${question.code}_severity`] = severityAnswers[question.code];
       }
     }
 
-    // Persist to offline outbox
+    // Persist to offline outbox (wrapped format for DB)
     for (const question of allQuestions) {
       const answerId = crypto.randomUUID();
+      const dbValue: Record<string, unknown> = { answer: answers[question.code] };
+      if (answers[question.code] === "yes" && severityAnswers[question.code]) {
+        dbValue.severity = severityAnswers[question.code];
+      }
       try {
         await syncController.enqueue("encounter_answer", answerId, "insert", {
           id: answerId,
           encounter_id: encounterId,
           question_id: question.code,
-          value: combinedAnswers[question.code],
+          value: dbValue,
           answered_by: userId,
           client_updated_at: new Date().toISOString(),
         });
@@ -147,7 +150,7 @@ export function StepQuestions({
       }
     }
 
-    onComplete(`qs_${syndromeIds.join("_")}`, combinedAnswers);
+    onComplete(`qs_${syndromeIds.join("_")}`, triageAnswers);
   };
 
   const handleSaveDraft = () => {

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { selectTriageOutcome, evaluateClinicalTriage, type TriageRuleLike } from "../triage";
+import {
+  selectTriageOutcome,
+  evaluateClinicalTriage,
+  evaluateMultiSyndromeTriage,
+  type TriageRuleLike,
+} from "../triage";
 
 const emergencyCholera: TriageRuleLike = {
   id: "rule-emergency",
@@ -93,6 +98,43 @@ describe("evaluateClinicalTriage", () => {
     });
     expect(outcome.referralRequired).toBe(true);
     expect(outcome.severity).toBe("urgent");
+  });
+
+  it("escalates to emergency when symptom severity is rated severe", () => {
+    const outcome = evaluateClinicalTriage("ACUTE_WATERY_DIARRHOEA", {
+      AWD_DEHYDRATION: "yes",
+      AWD_DEHYDRATION_severity: "severe",
+      AWD_EPISODES: "no",
+    });
+    expect(outcome.referralRequired).toBe(true);
+    expect(outcome.severity).toBe("emergency");
+  });
+
+  it("escalates to urgent referral when symptom severity is rated moderate", () => {
+    const outcome = evaluateClinicalTriage("ACUTE_RESPIRATORY", {
+      ARI_FAST_BREATHING: "yes",
+      ARI_FAST_BREATHING_severity: "moderate",
+    });
+    expect(outcome.referralRequired).toBe(true);
+    expect(outcome.severity).toBe("urgent");
+  });
+});
+
+describe("evaluateMultiSyndromeTriage", () => {
+  it("selects the most severe outcome when multiple syndromes are selected", () => {
+    // Syndrome 1: Routine AWD
+    // Syndrome 2: Emergency Fever with bleeding
+    const outcome = evaluateMultiSyndromeTriage(
+      ["ACUTE_WATERY_DIARRHOEA", "FEVER_BLEEDING"],
+      {
+        AWD_DEHYDRATION: "no",
+        AWD_EPISODES: "no",
+        FB_SPONTANEOUS_BLEEDING: "yes",
+      }
+    );
+    expect(outcome.severity).toBe("emergency");
+    expect(outcome.referralRequired).toBe(true);
+    expect(outcome.conditionCode).toBe("SUSPECTED_VHF");
   });
 });
 

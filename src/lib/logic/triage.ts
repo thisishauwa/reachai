@@ -67,7 +67,30 @@ function isAffirmative(val: unknown): boolean {
     return lower === "yes" || lower === "true" || lower === "1" || lower === "i";
   }
   if (typeof val === "number") return val === 1;
+  // Handle wrapped { answer: "yes" } objects from legacy outbox format
+  if (val && typeof val === "object" && "answer" in val) {
+    return isAffirmative((val as Record<string, unknown>).answer);
+  }
   return false;
+}
+
+/**
+ * Returns true if ANY `<code>_severity` key in the answers map is "severe" or "moderate".
+ * Used to escalate triage outcomes when the PPMV rates the symptom as worse than mild.
+ */
+function hasSevereSeverity(answers: Record<string, unknown>): boolean {
+  return Object.entries(answers).some(
+    ([key, val]) =>
+      key.endsWith("_severity") &&
+      typeof val === "string" &&
+      (val === "severe" || val === "moderate")
+  );
+}
+
+function isRatedSevere(answers: Record<string, unknown>): boolean {
+  return Object.entries(answers).some(
+    ([key, val]) => key.endsWith("_severity") && typeof val === "string" && val === "severe"
+  );
 }
 
 /**
@@ -115,8 +138,8 @@ export function evaluateClinicalTriage(
     const isDehydrated = isAffirmative(answers.AWD_DEHYDRATION);
     const hasManyEpisodes = isAffirmative(answers.AWD_EPISODES);
 
-    // Dire situation: Both "yes" and "yes" -> Suspected Cholera with Severe Dehydration
-    if (isDehydrated && hasManyEpisodes) {
+    // Severe rating OR both dehydration + many episodes → emergency (suspected Cholera)
+    if ((isDehydrated && hasManyEpisodes) || isRatedSevere(answers)) {
       return {
         severity: "emergency",
         referralRequired: true,
@@ -134,7 +157,7 @@ export function evaluateClinicalTriage(
       };
     }
 
-    if (isDehydrated || hasManyEpisodes || yesCount >= 1) {
+    if (isDehydrated || hasManyEpisodes || hasSevereSeverity(answers) || yesCount >= 1) {
       return {
         severity: "urgent",
         referralRequired: true,
@@ -172,7 +195,8 @@ export function evaluateClinicalTriage(
       isAffirmative(answers.FB_BLACK_STOOL) ||
       isAffirmative(answers.FB_CONTACT_HISTORY);
 
-    if (hasBleeding || yesCount >= 1) {
+    // Any confirmed bleeding sign or severe rating → always emergency (VHF)
+    if (hasBleeding || yesCount >= 1 || isRatedSevere(answers)) {
       return {
         severity: "emergency",
         referralRequired: true,
@@ -211,9 +235,31 @@ export function evaluateClinicalTriage(
       isAffirmative(answers.FNS_ALTERED_CONSCIOUSNESS) ||
       isAffirmative(answers.FNS_PHOTOPHOBIA);
 
-    if (hasMeningitisSigns || yesCount >= 1) {
+    // Altered consciousness alone or severe rating → emergency escalation
+    if (
+      isAffirmative(answers.FNS_ALTERED_CONSCIOUSNESS) ||
+      isRatedSevere(answers) ||
+      (hasMeningitisSigns && yesCount >= 2)
+    ) {
       return {
         severity: "emergency",
+        referralRequired: true,
+        conditionCode: "SUSPECTED_MENINGITIS",
+        conditionLabelEn: "Suspected Acute Bacterial Meningitis",
+        conditionLabelHa: "Zaton Cutar Sankarau",
+        guidanceEn:
+          "MEDICAL EMERGENCY: Signs of acute central nervous system infection. Administer first dose of pre-referral intramuscular ceftriaxone if certified. Refer immediately to secondary health facility.",
+        guidanceHa:
+          "GAGGAWA: Alamomin cutar sankarau. A ba da allurar farko ta ceftriaxone idan an sami izini. A tura asibiti nan da nan.",
+        ipcGuidanceEn:
+          "Droplet precautions: wear surgical mask when within 1 meter of patient. Ensure well-ventilated examination room.",
+        ipcGuidanceHa: "Kariyar numfashi: Sanya takunkumi yayin da kake kusa da majiyyaci. Bude tagogi don samun iska.",
+      };
+    }
+
+    if (hasMeningitisSigns || yesCount >= 1) {
+      return {
+        severity: "urgent",
         referralRequired: true,
         conditionCode: "SUSPECTED_MENINGITIS",
         conditionLabelEn: "Suspected Acute Bacterial Meningitis",
@@ -250,7 +296,8 @@ export function evaluateClinicalTriage(
       isAffirmative(answers.NDS_HYPOTHERMIA_FEVER);
     const hasInfection = isAffirmative(answers.NDS_UMBILICAL_INFECTION);
 
-    if (isCritical || yesCount >= 2) {
+    // Convulsions or severe severity → always emergency
+    if (isAffirmative(answers.NDS_CONVULSIONS) || isRatedSevere(answers) || (isCritical && yesCount >= 2)) {
       return {
         severity: "emergency",
         referralRequired: true,
@@ -266,7 +313,7 @@ export function evaluateClinicalTriage(
       };
     }
 
-    if (hasInfection || yesCount >= 1) {
+    if (isCritical || hasInfection || hasSevereSeverity(answers) || yesCount >= 1) {
       return {
         severity: "urgent",
         referralRequired: true,
@@ -299,7 +346,8 @@ export function evaluateClinicalTriage(
     const isSevere = isAffirmative(answers.ARI_STRIDOR) || isAffirmative(answers.ARI_CHEST_INDRAWING);
     const isModerate = isAffirmative(answers.ARI_FAST_BREATHING);
 
-    if (isSevere || yesCount >= 2) {
+    // Stridor, chest indrawing, or severe rating → emergency
+    if (isSevere || isRatedSevere(answers) || yesCount >= 2) {
       return {
         severity: "emergency",
         referralRequired: true,
@@ -315,7 +363,7 @@ export function evaluateClinicalTriage(
       };
     }
 
-    if (isModerate || yesCount >= 1) {
+    if (isModerate || hasSevereSeverity(answers) || yesCount >= 1) {
       return {
         severity: "urgent",
         referralRequired: true,
@@ -348,7 +396,8 @@ export function evaluateClinicalTriage(
     const hasHemoptysis = isAffirmative(answers.COUGH_HEMOPTYSIS);
     const hasWeightLoss = isAffirmative(answers.COUGH_WEIGHT_LOSS);
 
-    if (hasHemoptysis || hasWeightLoss || yesCount >= 2) {
+    // Hemoptysis, weight loss, or severe severity → TB referral
+    if (hasHemoptysis || hasWeightLoss || isRatedSevere(answers) || yesCount >= 2) {
       return {
         severity: "urgent",
         referralRequired: true,
@@ -365,7 +414,7 @@ export function evaluateClinicalTriage(
       };
     }
 
-    if (yesCount >= 1) {
+    if (hasSevereSeverity(answers) || yesCount >= 1) {
       return {
         severity: "urgent",
         referralRequired: true,
@@ -396,7 +445,7 @@ export function evaluateClinicalTriage(
   if (code.includes("PARALYSIS") || code.includes("AFP") || code.includes("FLACCID")) {
     const hasParalysis = isAffirmative(answers.AFP_SUDDEN_WEAKNESS) || isAffirmative(answers.AFP_PROGRESSION);
 
-    if (hasParalysis || yesCount >= 1) {
+    if (hasParalysis || isRatedSevere(answers) || yesCount >= 1) {
       return {
         severity: "urgent",
         referralRequired: true,
@@ -431,7 +480,28 @@ export function evaluateClinicalTriage(
     const hasDarkUrineOrPaleStool =
       isAffirmative(answers.JAUNDICE_DARK_URINE) || isAffirmative(answers.JAUNDICE_PALE_STOOL);
 
-    if (hasYellowEyes || hasDarkUrineOrPaleStool || yesCount >= 1) {
+    // All three positive signs or severe severity → escalate to emergency
+    if (
+      (hasYellowEyes && hasDarkUrineOrPaleStool) ||
+      isRatedSevere(answers) ||
+      yesCount >= 3
+    ) {
+      return {
+        severity: "emergency",
+        referralRequired: true,
+        conditionCode: "ACUTE_JAUNDICE_SEVERE",
+        conditionLabelEn: "Acute Jaundice Syndrome — Severe (Suspected Hepatic Failure)",
+        conditionLabelHa: "Zazzabin Shawara Mai Tsanani Sosai",
+        guidanceEn:
+          "Multiple jaundice danger signs detected. Avoid all hepatotoxic medications. Refer urgently to secondary facility for liver function tests and viral hepatitis markers.",
+        guidanceHa:
+          "Alamomin shawara masu tsanani da yawa. Guji duk magungunan da ke cutarwa ga hanta. A tura asibiti nan take domin gwajin hanta.",
+        ipcGuidanceEn: "Enteric hygiene precautions. Clean sanitary facilities with chlorine.",
+        ipcGuidanceHa: "Kula da tsabtar bayan gida da wanke hannu da sabulu.",
+      };
+    }
+
+    if (hasYellowEyes || hasDarkUrineOrPaleStool || hasSevereSeverity(answers) || yesCount >= 1) {
       return {
         severity: "urgent",
         referralRequired: true,
@@ -474,6 +544,22 @@ export function evaluateClinicalTriage(
         "An gano alamomin cuta da ba a saba gani ba. A rubuta bayanan, a sanar da jami'in sa ido kan cututtuka, kuma a tura majiyyaci asibiti domin bincike.",
       ipcGuidanceEn: "Maintain strict infection prevention and control (IPC) precautions until etiology is determined.",
       ipcGuidanceHa: "Kiyaye matakan kariya daga yaduwar cuta har sai an tabbatar da asalin ciwon.",
+    };
+  }
+
+  // General rule: If PPMV rates any symptom as severe → always refer
+  if (isRatedSevere(answers)) {
+    return {
+      severity: "urgent",
+      referralRequired: true,
+      conditionCode: "SEVERITY_ESCALATION",
+      conditionLabelEn: "Symptom Severity Escalation",
+      conditionLabelHa: "Tsananin Alamomin Ya Karu",
+      guidanceEn:
+        "Severe symptom rating recorded. Refer patient to primary/secondary health facility for physician review.",
+      guidanceHa: "An yi rikodin tsananin alamomin cuta. A tura majiyyaci asibiti domin likita ya duba shi.",
+      ipcGuidanceEn: null,
+      ipcGuidanceHa: null,
     };
   }
 
