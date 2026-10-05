@@ -460,6 +460,23 @@ export function evaluateClinicalTriage(
     };
   }
 
+  // 9. Other Priority / Unusual Symptoms (IDSR Category 4)
+  if (code.includes("OTHER") || code.includes("UNUSUAL") || code.includes("CATEGORY_4")) {
+    return {
+      severity: "urgent",
+      referralRequired: true,
+      conditionCode: "IDSR_CATEGORY_4_UNUSUAL",
+      conditionLabelEn: "IDSR Category 4: Unusual Health Event / Priority Surveillance",
+      conditionLabelHa: "IDSR Rukuni na 4: Alamomin da ba a saba gani ba",
+      guidanceEn:
+        "Unusual symptom presentation or potential public health event detected. Document observations, notify local surveillance officer, and refer patient for secondary diagnostic evaluation.",
+      guidanceHa:
+        "An gano alamomin cuta da ba a saba gani ba. A rubuta bayanan, a sanar da jami'in sa ido kan cututtuka, kuma a tura majiyyaci asibiti domin bincike.",
+      ipcGuidanceEn: "Maintain strict infection prevention and control (IPC) precautions until etiology is determined.",
+      ipcGuidanceHa: "Kiyaye matakan kariya daga yaduwar cuta har sai an tabbatar da asalin ciwon.",
+    };
+  }
+
   // General rule: If user answers 2 or more affirmative ("yes" and "yes"), it is dire and requires referral!
   if (yesCount >= 2) {
     return {
