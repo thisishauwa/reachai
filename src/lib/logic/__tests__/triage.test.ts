@@ -118,6 +118,28 @@ describe("evaluateClinicalTriage", () => {
     expect(outcome.referralRequired).toBe(true);
     expect(outcome.severity).toBe("urgent");
   });
+
+  it("diagnoses Suspected Acute Bacterial Meningitis when neck stiffness syndrome is selected even with no extra sub-symptoms", () => {
+    const outcome = evaluateClinicalTriage("FEVER_NECK_STIFFNESS", {
+      FNS_NECK_RIGIDITY: "no",
+      FNS_ALTERED_CONSCIOUSNESS: "no",
+      FNS_PHOTOPHOBIA: "no",
+    });
+    expect(outcome.referralRequired).toBe(true);
+    expect(outcome.severity).toBe("urgent");
+    expect(outcome.conditionCode).toBe("SUSPECTED_MENINGITIS");
+    expect(outcome.conditionLabelEn).toBe("Suspected Acute Bacterial Meningitis");
+  });
+
+  it("escalates to emergency meningitis when altered consciousness or severe rating is present", () => {
+    const outcome = evaluateClinicalTriage("FEVER_NECK_STIFFNESS", {
+      FNS_NECK_RIGIDITY: "yes",
+      FNS_ALTERED_CONSCIOUSNESS: "yes",
+    });
+    expect(outcome.referralRequired).toBe(true);
+    expect(outcome.severity).toBe("emergency");
+    expect(outcome.conditionCode).toBe("SUSPECTED_MENINGITIS");
+  });
 });
 
 describe("evaluateMultiSyndromeTriage", () => {

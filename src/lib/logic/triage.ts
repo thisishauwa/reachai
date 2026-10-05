@@ -235,7 +235,7 @@ export function evaluateClinicalTriage(
       isAffirmative(answers.FNS_ALTERED_CONSCIOUSNESS) ||
       isAffirmative(answers.FNS_PHOTOPHOBIA);
 
-    // Altered consciousness alone or severe rating → emergency escalation
+    // Altered consciousness alone or severe rating or multiple positive signs → emergency escalation
     if (
       isAffirmative(answers.FNS_ALTERED_CONSCIOUSNESS) ||
       isRatedSevere(answers) ||
@@ -257,34 +257,21 @@ export function evaluateClinicalTriage(
       };
     }
 
-    if (hasMeningitisSigns || yesCount >= 1) {
-      return {
-        severity: "urgent",
-        referralRequired: true,
-        conditionCode: "SUSPECTED_MENINGITIS",
-        conditionLabelEn: "Suspected Acute Bacterial Meningitis",
-        conditionLabelHa: "Zaton Cutar Sankarau",
-        guidanceEn:
-          "MEDICAL EMERGENCY: Signs of acute central nervous system infection. Administer first dose of pre-referral intramuscular ceftriaxone if certified. Refer immediately to secondary health facility.",
-        guidanceHa:
-          "GAGGAWA: Alamomin cutar sankarau. A ba da allurar farko ta ceftriaxone idan an sami izini. A tura asibiti nan da nan.",
-        ipcGuidanceEn:
-          "Droplet precautions: wear surgical mask when within 1 meter of patient. Ensure well-ventilated examination room.",
-        ipcGuidanceHa: "Kariyar numfashi: Sanya takunkumi yayin da kake kusa da majiyyaci. Bude tagogi don samun iska.",
-      };
-    }
-
+    // Under IDSR case definition, acute neck stiffness IS the cardinal danger sign for suspected meningitis.
+    // It must ALWAYS trigger referral for lumbar puncture and cerebrospinal fluid analysis.
     return {
-      severity: "routine",
-      referralRequired: false,
-      conditionCode: "FEBRILE_ILLNESS",
-      conditionLabelEn: "Acute Febrile Illness",
-      conditionLabelHa: "Zazzabi",
+      severity: "urgent",
+      referralRequired: true,
+      conditionCode: "SUSPECTED_MENINGITIS",
+      conditionLabelEn: "Suspected Acute Bacterial Meningitis",
+      conditionLabelHa: "Zaton Cutar Sankarau",
       guidanceEn:
-        "Perform malaria RDT. Treat according to clinical protocol. Re-evaluate if headache or neck pain worsens.",
-      guidanceHa: "A duba zazzabin cizon sauro. A kula idan ciwon kai ko wuya ya karu.",
-      ipcGuidanceEn: null,
-      ipcGuidanceHa: null,
+        "Suspected Acute Bacterial Meningitis: Neck stiffness detected. Urgent referral to secondary health facility for lumbar puncture and antibiotic therapy. Isolate with droplet precautions.",
+      guidanceHa:
+        "Zaton cutar sankarau: An gano wuya ta kafe. A tura asibiti cikin gaggawa domin gwajin ruwan kashin baya da maganin rigakafi. A sanya takunkumi.",
+      ipcGuidanceEn:
+        "Droplet precautions: wear surgical mask when within 1 meter of patient. Ensure well-ventilated examination room.",
+      ipcGuidanceHa: "Kariyar numfashi: Sanya takunkumi yayin da kake kusa da majiyyaci. Bude tagogi don samun iska.",
     };
   }
 
