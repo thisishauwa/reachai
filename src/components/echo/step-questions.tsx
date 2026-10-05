@@ -26,6 +26,7 @@ interface StepQuestionsProps {
   syndromeLabels?: string[];
   encounterId: string;
   encounterCode?: string;
+  patientName?: string;
   isAnonymous?: boolean;
   sessionCode?: string;
   onComplete: (questionSetId: string, answers: Record<string, unknown>) => void;
@@ -43,6 +44,7 @@ export function StepQuestions({
   syndromeLabels = [],
   encounterId,
   encounterCode = "ABC-1234-98",
+  patientName,
   isAnonymous = true,
   sessionCode,
   onComplete,
@@ -164,7 +166,7 @@ export function StepQuestions({
         <div className="bg-[#f9f9f9] rounded-[16px] px-5 py-4 flex items-center justify-between">
           <div className="flex flex-col gap-0.5">
             <span className="font-medium text-base text-[#242b33]">
-              {isAnonymous ? "Anonymous patient" : "Patient"}
+              {patientName || (isAnonymous ? "Anonymous patient" : "Patient")}
             </span>
             <span className="text-sm text-[#6e8298]">
               {isAnonymous
@@ -213,7 +215,7 @@ export function StepQuestions({
       <div className="bg-[#f9f9f9] rounded-[16px] px-5 py-4 flex items-center justify-between">
         <div className="flex flex-col gap-0.5">
           <span className="font-medium text-base text-[#242b33]">
-            {isAnonymous ? "Anonymous patient" : "Patient"}
+            {patientName || (isAnonymous ? "Anonymous patient" : "Patient")}
           </span>
           <span className="text-sm text-[#6e8298]">
             {isAnonymous

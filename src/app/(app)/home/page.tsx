@@ -283,7 +283,7 @@ export default function HomePage() {
           Quick Actions
         </h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 sm:gap-2.5 md:gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5 md:gap-3">
           {workflowMode === "echo" && (
             <>
               {/* Start ECHO Encounter */}
@@ -401,8 +401,8 @@ export default function HomePage() {
 
       {/* Pending Referral Alert */}
       {pendingReferral && (
-        <section>
-          <div className="bg-[#fff1ed] rounded-[20px] sm:rounded-[24px] p-3.5 sm:p-4 flex items-center justify-between gap-3 border-0 shadow-none">
+        <section className="w-full">
+          <div className="w-full bg-[#fff1ed] rounded-[20px] sm:rounded-[24px] p-3.5 sm:p-4 flex items-center justify-between gap-3 border-0 shadow-none">
             <div className="flex items-center gap-3">
               <div className="size-9 sm:size-10 rounded-full bg-[#ffded6] text-[#e05338] flex items-center justify-center shrink-0">
                 <Info className="size-5" />

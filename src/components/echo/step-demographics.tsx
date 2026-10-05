@@ -3,25 +3,22 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { UserCheck, UserPlus, Search, Check, ChevronDown } from "lucide-react";
+import { usePatients } from "@/lib/queries/patients";
+import { useSession } from "@/lib/session/session-context";
+import type { PrivacyMode } from "@/lib/supabase/database.types";
 
 /**
- * AC2 — Demographics screen matching the Sentinel prototype exactly.
- *
- * Fields (in order):
- *  1. Age            — free-text integer (years completed)
- *  2. Sex            — Female / Male / Other / not stated
- *  3. Pregnancy      — Not pregnant / not applicable | Pregnant | Not sure / prefer not to say
- *  4. Insurance      — No insurance | NHIA / other cover
- *  5. Distance       — Under 2 km | 2–5 km | Over 5 km
- *  6. Education      — None / primary | Secondary | Tertiary
- *  7. Occupation     — Trader | Farmer | Student | Other
- *  8. Visit type     — First visit | Follow-up
- *
- * Anonymous-only: no name / phone / identifiers.
+ * Demographics screen matching the Sentinel prototype with support for both
+ * Identified Patient (linked records, care continuity) and Anonymous (study code) modes.
  */
 
 export interface DemographicsData {
+  fullName?: string;
+  phone?: string;
+  existingPatientId?: string;
   ageExact: number | null;
+  ageBand: string;
   sex: "female" | "male" | "other_not_stated";
   pregnancyStatus: "not_pregnant" | "pregnant" | "not_sure" | null;
   insuranceStatus: "no_insurance" | "nhia_or_other";
@@ -32,10 +29,23 @@ export interface DemographicsData {
 }
 
 interface StepDemographicsProps {
+  privacyMode?: PrivacyMode;
   sessionCode?: string;
   onGenerateNewCode?: () => void;
   onContinue: (data: DemographicsData) => void;
   onPrevious?: () => void;
+}
+
+export function ageExactToBand(age: number | null): string {
+  if (age === null || isNaN(age)) return "25_49_years";
+  if (age <= 0) return "0_28_days";
+  if (age < 1) return "1_11_months";
+  if (age <= 4) return "1_4_years";
+  if (age <= 14) return "5_14_years";
+  if (age <= 24) return "15_24_years";
+  if (age <= 49) return "25_49_years";
+  if (age <= 64) return "50_64_years";
+  return "65_plus";
 }
 
 // ── Tile grid helper ─────────────────────────────────────────────────────────
@@ -94,7 +104,6 @@ function TileGrid<T extends string>({
   );
 }
 
-// ── Section label ────────────────────────────────────────────────────────────
 function FieldLabel({
   label,
   sub,
@@ -116,11 +125,22 @@ function FieldLabel({
 }
 
 export function StepDemographics({
+  privacyMode = "identified",
   sessionCode,
   onGenerateNewCode,
   onContinue,
   onPrevious,
 }: StepDemographicsProps) {
+  const { activeFacility } = useSession();
+  const { data: existingPatients = [] } = usePatients(activeFacility?.facilityId);
+
+  // Identified fields
+  const [patientChoice, setPatientChoice] = useState<"new" | "existing">("new");
+  const [selectedPatientId, setSelectedPatientId] = useState<string>("");
+  const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
+
+  // Sentinel Shared demographic fields
   const [age, setAge] = useState("");
   const [sex, setSex] = useState<DemographicsData["sex"] | "">("");
   const [pregnancy, setPregnancy] = useState<DemographicsData["pregnancyStatus"] | "">("");
@@ -130,7 +150,30 @@ export function StepDemographics({
   const [occupation, setOccupation] = useState<DemographicsData["occupationType"] | "">("");
   const [visitType, setVisitType] = useState<DemographicsData["visitType"] | "">("");
 
+  const handleSelectExisting = (patientId: string) => {
+    setSelectedPatientId(patientId);
+    const p = existingPatients.find((pt) => pt.id === patientId);
+    if (!p) return;
+    setFullName(p.full_name);
+    setPhone(p.phone_e164 ? p.phone_e164.replace(/^\+234/, "0") : "");
+    if (p.sex === "female" || p.sex === "male") {
+      setSex(p.sex);
+    }
+    if (p.pregnancy_status === "pregnant" || p.pregnancy_status === "not_pregnant") {
+      setPregnancy(p.pregnancy_status);
+    }
+  };
+
   const handleContinue = () => {
+    if (privacyMode === "identified") {
+      if (patientChoice === "existing" && !selectedPatientId) {
+        return toast.error("Please select an existing patient");
+      }
+      if (patientChoice === "new" && !fullName.trim()) {
+        return toast.error("Please enter the patient's full name");
+      }
+    }
+
     if (!sex) return toast.error("Please select a sex");
     if (!pregnancy && sex === "female") return toast.error("Please select pregnancy status");
     if (!insurance) return toast.error("Please select health insurance status");
@@ -139,8 +182,15 @@ export function StepDemographics({
     if (!occupation) return toast.error("Please select occupation");
     if (!visitType) return toast.error("Please select visit type");
 
+    const parsedAge = age ? parseInt(age, 10) : null;
+    const band = ageExactToBand(parsedAge);
+
     onContinue({
-      ageExact: age ? parseInt(age, 10) : null,
+      fullName: privacyMode === "identified" ? fullName.trim() : undefined,
+      phone: privacyMode === "identified" && phone.trim() ? phone.trim() : undefined,
+      existingPatientId: privacyMode === "identified" && patientChoice === "existing" ? selectedPatientId : undefined,
+      ageExact: parsedAge,
+      ageBand: band,
       sex: sex as DemographicsData["sex"],
       pregnancyStatus: pregnancy || (sex === "female" ? null : "not_pregnant"),
       insuranceStatus: insurance as DemographicsData["insuranceStatus"],
@@ -168,36 +218,118 @@ export function StepDemographics({
           </p>
         </div>
 
-        {/* ── Study Code Card (matching Sentinel image) ──────────── */}
-        {sessionCode && (
-          <div className="bg-[#eef6f3] border border-[#c4e4dc] rounded-[16px] p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="size-11 rounded-[12px] bg-[#d9eee7] flex items-center justify-center text-[#1a8f76] shrink-0">
-                <svg viewBox="0 0 24 24" fill="none" className="size-5 stroke-[#1a8f76]" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                  <polyline points="14 2 14 8 20 8" />
-                  <line x1="16" y1="13" x2="8" y2="13" />
-                  <line x1="16" y1="17" x2="8" y2="17" />
-                  <polyline points="10 9 9 9 8 9" />
-                </svg>
+        {/* ── Mode Banner / Code Card ──────────── */}
+        {privacyMode === "anonymous" ? (
+          sessionCode && (
+            <div className="bg-[#eef6f3] border border-[#c4e4dc] rounded-[16px] p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="size-11 rounded-[12px] bg-[#d9eee7] flex items-center justify-center text-[#1a8f76] shrink-0">
+                  <svg viewBox="0 0 24 24" fill="none" className="size-5 stroke-[#1a8f76]" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="16" y1="13" x2="8" y2="13" />
+                    <line x1="16" y1="17" x2="8" y2="17" />
+                    <polyline points="10 9 9 9 8 9" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold tracking-wider text-[#6e8298] uppercase">
+                    STUDY CODE (ANONYMOUS)
+                  </p>
+                  <p className="text-[17px] font-bold text-[#1a3a34] tracking-tight">
+                    {sessionCode}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-[11px] font-bold tracking-wider text-[#6e8298] uppercase">
-                  STUDY CODE
-                </p>
-                <p className="text-[17px] font-bold text-[#1a3a34] tracking-tight">
-                  {sessionCode}
-                </p>
-              </div>
+              {onGenerateNewCode && (
+                <button
+                  type="button"
+                  onClick={onGenerateNewCode}
+                  className="px-3 py-1.5 rounded-[10px] bg-white border border-[#c4e4dc] text-[#1a3a34] text-[13px] font-semibold hover:bg-[#f6faf8] transition-colors cursor-pointer shadow-sm"
+                >
+                  Generate new
+                </button>
+              )}
             </div>
-            {onGenerateNewCode && (
-              <button
-                type="button"
-                onClick={onGenerateNewCode}
-                className="px-3 py-1.5 rounded-[10px] bg-white border border-[#c4e4dc] text-[#1a3a34] text-[13px] font-semibold hover:bg-[#f6faf8] transition-colors cursor-pointer shadow-sm"
-              >
-                Generate new
-              </button>
+          )
+        ) : (
+          /* Identified Mode: Patient selection or entry */
+          <div className="bg-white rounded-[16px] p-4 sm:p-5 border border-[#e4e8ec] flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <span className="text-[14px] font-semibold text-[#1a1a1a]">
+                Patient Information
+              </span>
+              {existingPatients.length > 0 && (
+                <div className="inline-flex bg-[#f2f3f5] p-0.5 rounded-[8px]">
+                  <button
+                    type="button"
+                    onClick={() => setPatientChoice("new")}
+                    className={cn(
+                      "px-3 py-1 text-xs font-medium rounded-[6px] transition-all cursor-pointer",
+                      patientChoice === "new"
+                        ? "bg-white text-[#242b33] shadow-sm"
+                        : "text-[#6e8298]"
+                    )}
+                  >
+                    New Patient
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPatientChoice("existing")}
+                    className={cn(
+                      "px-3 py-1 text-xs font-medium rounded-[6px] transition-all cursor-pointer",
+                      patientChoice === "existing"
+                        ? "bg-white text-[#242b33] shadow-sm"
+                        : "text-[#6e8298]"
+                    )}
+                  >
+                    Existing Patient
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {patientChoice === "existing" && existingPatients.length > 0 ? (
+              <div className="flex flex-col gap-2">
+                <FieldLabel label="Select Patient" required />
+                <select
+                  value={selectedPatientId}
+                  onChange={(e) => handleSelectExisting(e.target.value)}
+                  className="w-full bg-[#fafafa] rounded-[12px] border border-[#e4e8ec] px-4 py-3 text-[15px] text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#0073f3] transition-all cursor-pointer"
+                >
+                  <option value="">Select a registered patient...</option>
+                  {existingPatients.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.full_name} ({p.patient_code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <FieldLabel label="Full Name" required />
+                  <input
+                    type="text"
+                    id="patient-fullname-input"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="e.g. Amina Ibrahim"
+                    className="w-full bg-white rounded-[12px] border border-[#e4e8ec] px-4 py-3 text-[15px] text-[#1a1a1a] placeholder:text-[#c7d2de] outline-none focus:ring-2 focus:ring-[#0073f3] transition-all"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <FieldLabel label="Phone Number" sub="Optional" />
+                  <input
+                    type="tel"
+                    id="patient-phone-input"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="e.g. 08012345678"
+                    className="w-full bg-white rounded-[12px] border border-[#e4e8ec] px-4 py-3 text-[15px] text-[#1a1a1a] placeholder:text-[#c7d2de] outline-none focus:ring-2 focus:ring-[#0073f3] transition-all"
+                  />
+                </div>
+              </div>
             )}
           </div>
         )}

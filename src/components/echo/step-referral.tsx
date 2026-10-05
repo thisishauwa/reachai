@@ -10,26 +10,23 @@ import { createIdempotencyKey } from "@/lib/logic/idempotency";
 import { useDestinationFacilities } from "@/lib/queries/referrals";
 import { ReferralConsentModal } from "@/components/echo/referral-consent-modal";
 import { ReferralGeneratedSheet } from "@/components/echo/referral-generated-sheet";
+import type { PrivacyMode } from "@/lib/supabase/database.types";
 
-/**
- * AC7 — Confirm Referral generates a unique referral code (ECH-XXXXX format)
- *        and displays it on screen.
- *
- * Anonymous-only: no identified mode, no consent signature required here.
- * The offline / RPC fallback always generates a code so the UI is never
- * left in a confirmed-but-codeless state.
- */
-export function StepReferral({
-  encounterId,
-  onComplete,
-}: {
+interface StepReferralProps {
   encounterId: string;
-  /** Legacy props accepted but ignored — always anonymous */
-  privacyMode?: string;
+  privacyMode?: PrivacyMode;
   consentId?: string | null;
   patientName?: string;
   onComplete: () => void;
-}) {
+}
+
+export function StepReferral({
+  encounterId,
+  privacyMode = "identified",
+  consentId = null,
+  patientName = "Patient",
+  onComplete,
+}: StepReferralProps) {
   const queryClient = useQueryClient();
   const { activeFacility, userId } = useSession();
   const [referralCode, setReferralCode] = useState<string | null>(null);
@@ -38,10 +35,9 @@ export function StepReferral({
     activeFacility.facilityId
   );
 
-  const handleGenerateReferral = async (_data: { referralMode: "anonymous" }) => {
+  const handleGenerateReferral = async (data: { referralMode: PrivacyMode }) => {
     setIsGenerating(true);
 
-    // AC7 — code format: ECH-XXXXX (alphanumeric, short)
     const randomPart = Math.random().toString(36).substring(2, 7).toUpperCase();
     const fallbackCode = `ECH-${randomPart}`;
     const referralId = crypto.randomUUID();
@@ -57,8 +53,8 @@ export function StepReferral({
         {
           p_encounter_id: encounterId,
           p_destination_facility_id: destinationFacilityId,
-          p_privacy_mode: "anonymous",
-          p_consent_id: null,
+          p_privacy_mode: data.referralMode,
+          p_consent_id: data.referralMode === "identified" ? consentId : null,
           p_idempotency_key: createIdempotencyKey(),
         }
       );
@@ -75,8 +71,8 @@ export function StepReferral({
           organization_id: activeFacility.organizationId,
           destination_facility_id: destinationFacilityId,
           originating_facility_id: activeFacility.facilityId,
-          privacy_mode: "anonymous",
-          consent_id: null,
+          privacy_mode: data.referralMode,
+          consent_id: data.referralMode === "identified" ? consentId : null,
           referral_code: fallbackCode,
           status: "created",
           created_by: userId,
@@ -84,11 +80,10 @@ export function StepReferral({
       }
     } catch (e) {
       console.warn("create_referral exception:", e);
-      // AC edge case — code generation fails (offline): show error with retry
       toast.error("Could not generate referral code. Please retry.", {
         action: {
           label: "Retry",
-          onClick: () => handleGenerateReferral({ referralMode: "anonymous" }),
+          onClick: () => handleGenerateReferral(data),
         },
       });
       setIsGenerating(false);
@@ -114,6 +109,8 @@ export function StepReferral({
   return (
     <div className="w-full">
       <ReferralConsentModal
+        initialMode={privacyMode}
+        patientName={patientName}
         onSubmit={handleGenerateReferral}
         isLoading={isGenerating}
       />

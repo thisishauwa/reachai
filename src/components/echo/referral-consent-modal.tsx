@@ -1,25 +1,28 @@
 "use client";
 
 import { useState } from "react";
-import { ShieldCheck } from "lucide-react";
-
-/**
- * AC7 — Simplified referral consent for anonymous-only encounters.
- *
- * The identified mode and its signature flow have been removed.
- * Pressing "Confirm Referral" triggers code generation (handled by parent).
- */
+import { ShieldCheck, UserCheck } from "lucide-react";
+import type { PrivacyMode } from "@/lib/supabase/database.types";
 
 interface ReferralConsentModalProps {
-  onSubmit: (data: { referralMode: "anonymous" }) => void;
+  initialMode?: PrivacyMode;
+  patientName?: string;
+  onSubmit: (data: {
+    referralMode: PrivacyMode;
+    signatureMethod?: "type" | "draw";
+    signatureText?: string;
+  }) => void;
   isLoading?: boolean;
 }
 
 export function ReferralConsentModal({
+  initialMode = "identified",
+  patientName = "Patient",
   onSubmit,
   isLoading = false,
 }: ReferralConsentModalProps) {
   const [confirmed, setConfirmed] = useState(false);
+  const [referralMode] = useState<PrivacyMode>(initialMode);
 
   return (
     <div className="w-full bg-white dark:bg-background rounded-[24px] p-6 sm:p-8 flex flex-col gap-6">
@@ -35,24 +38,43 @@ export function ReferralConsentModal({
 
       <div className="h-px bg-[#f2f3f5] w-full" />
 
-      {/* Anonymous info card */}
-      <div className="bg-[#f0f7ff] rounded-[20px] p-5 flex items-start gap-4">
-        <div className="size-11 rounded-[12px] bg-[#cce3fd] text-[#0073f3] flex items-center justify-center shrink-0">
-          <ShieldCheck className="size-5" />
+      {/* Info card */}
+      {referralMode === "identified" ? (
+        <div className="bg-[#f0f7ff] rounded-[20px] p-5 flex items-start gap-4">
+          <div className="size-11 rounded-[12px] bg-[#cce3fd] text-[#0073f3] flex items-center justify-center shrink-0">
+            <UserCheck className="size-5" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="font-semibold text-base text-[#242b33]">
+              Identified Referral · {patientName}
+            </span>
+            <p className="text-xs sm:text-sm text-[#6e8298] leading-relaxed">
+              Patient name and clinical findings will be linked with the receiving facility for treatment continuity.
+            </p>
+            <p className="text-xs text-[#6e8298] mt-1 italic">
+              Za a haɗa sunan majiyyaci da bayanan asibiti don ci gaba da kula da lafiya.
+            </p>
+          </div>
         </div>
-        <div className="flex flex-col gap-1">
-          <span className="font-semibold text-base text-[#242b33]">
-            Anonymous Referral
-          </span>
-          <p className="text-xs sm:text-sm text-[#6e8298] leading-relaxed">
-            A unique referral code will be generated. No personal data is
-            included. The patient can use this code at the referral site.
-          </p>
-          <p className="text-xs text-[#6e8298] mt-1 italic">
-            Za a ƙirƙiro lambar turawa ta musamman. Ba a haɗa bayanin sirri.
-          </p>
+      ) : (
+        <div className="bg-[#f0f7ff] rounded-[20px] p-5 flex items-start gap-4">
+          <div className="size-11 rounded-[12px] bg-[#cce3fd] text-[#0073f3] flex items-center justify-center shrink-0">
+            <ShieldCheck className="size-5" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="font-semibold text-base text-[#242b33]">
+              Anonymous Referral
+            </span>
+            <p className="text-xs sm:text-sm text-[#6e8298] leading-relaxed">
+              A unique referral code will be generated. No personal data is
+              included. The patient can use this code at the referral site.
+            </p>
+            <p className="text-xs text-[#6e8298] mt-1 italic">
+              Za a ƙirƙiro lambar turawa ta musamman. Ba a haɗa bayanin sirri.
+            </p>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Disclaimer */}
       <div className="bg-[#fff8f6] border border-[#ffd5c8] rounded-[12px] px-4 py-3">
@@ -67,8 +89,9 @@ export function ReferralConsentModal({
       {/* Confirm checkbox */}
       <button
         type="button"
+        id="referral-consent-confirm-btn"
         onClick={() => setConfirmed((v) => !v)}
-        className="flex items-start gap-3 text-left"
+        className="flex items-start gap-3 text-left cursor-pointer"
       >
         <div
           className={`size-5 rounded-[4px] mt-0.5 flex items-center justify-center transition-colors shrink-0 border ${
@@ -90,9 +113,13 @@ export function ReferralConsentModal({
           )}
         </div>
         <span className="text-sm text-[#242b33]">
-          I confirm this anonymous referral should be created.
+          {referralMode === "identified"
+            ? `I confirm this referral should be created for ${patientName}.`
+            : "I confirm this anonymous referral should be created."}
           <span className="block text-xs text-[#6e8298] mt-0.5">
-            Na tabbatar da cewa ya kamata a ƙirƙiro wannan turawa ba tare da suna ba.
+            {referralMode === "identified"
+              ? "Na tabbatar da cewa ya kamata a ƙirƙiro wannan turawa ga majiyyaci."
+              : "Na tabbatar da cewa ya kamata a ƙirƙiro wannan turawa ba tare da suna ba."}
           </span>
         </span>
       </button>
@@ -102,7 +129,7 @@ export function ReferralConsentModal({
         type="button"
         id="generate-referral-btn"
         disabled={!confirmed || isLoading}
-        onClick={() => onSubmit({ referralMode: "anonymous" })}
+        onClick={() => onSubmit({ referralMode })}
         className="w-full py-4 rounded-[12px] bg-[#0073f3] hover:bg-[#0060cb] disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-base transition-colors cursor-pointer"
       >
         {isLoading ? "Generating..." : "Confirm Referral & Generate Code"}

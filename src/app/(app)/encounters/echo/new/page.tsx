@@ -11,10 +11,11 @@ import { db } from "@/lib/offline/db";
 import {
   generateEncounterCode,
   generateSessionCode,
+  generatePatientCode,
 } from "@/lib/reference/codes";
 import { useActiveConsentText } from "@/lib/queries/reference";
 import { EncounterHeader } from "@/components/echo/encounter-header";
-import { StepConsent } from "@/components/echo/step-consent";
+import { StepConsent, type StepConsentResult } from "@/components/echo/step-consent";
 import { StepDemographics, type DemographicsData } from "@/components/echo/step-demographics";
 import { StepSyndrome } from "@/components/echo/step-syndrome";
 import { StepQuestions } from "@/components/echo/step-questions";
@@ -22,14 +23,7 @@ import { StepTriage } from "@/components/echo/step-triage";
 import { StepReferral } from "@/components/echo/step-referral";
 import { EncounterCompletedModal } from "@/components/echo/encounter-completed-modal";
 import { useZeroReport } from "@/lib/session/use-zero-report";
-import type { TriageSeverity } from "@/lib/supabase/database.types";
-
-/**
- * AC1 — No second consent step, no Identified Patient option, no Create New
- *        Patient button. Anonymous mode is the only path.
- *
- * Flow: consent → demographics → symptom-entry → questions → triage → referral → complete
- */
+import type { PrivacyMode, TriageSeverity } from "@/lib/supabase/database.types";
 
 type EchoStep =
   | "privacy"
@@ -43,9 +37,14 @@ type EchoStep =
 interface EchoEncounterState {
   step: EchoStep;
   encounterId: string | null;
+  patientId: string | null;
+  patientName: string | null;
+  privacyMode: PrivacyMode;
   sessionCode: string | null;
   consentId: string | null;
   locale: "en" | "ha";
+  signatureMethod?: "type" | "draw";
+  signatureText?: string;
   /** Selected individual symptom codes */
   symptomCodes: string[];
   /** Derived IDSR syndrome IDs (sent to backend) */
@@ -63,6 +62,9 @@ interface EchoEncounterState {
 const INITIAL_STATE: EchoEncounterState = {
   step: "privacy",
   encounterId: null,
+  patientId: null,
+  patientName: null,
+  privacyMode: "identified",
   sessionCode: null,
   consentId: null,
   locale: "en",
@@ -89,11 +91,15 @@ export default function NewEchoEncounterPage() {
   const [completing, setCompleting] = useState(false);
 
   const { data: anonConsentText } = useActiveConsentText("anonymous_screening");
+  const { data: identifiedConsentText } = useActiveConsentText("identified_referral");
 
   // ── Consent record helper ──────────────────────────────────────────────
   async function saveConsentRecord(
     encounterId: string,
     consentId: string,
+    kind: "identified_referral" | "anonymous_screening",
+    method: "verbal_attestation" | "drawn_signature" | "typed_signature",
+    signature?: string,
     textVersionId?: string | null
   ) {
     const supabase = createClient();
@@ -102,7 +108,7 @@ export default function NewEchoEncounterPage() {
       const { data: ver } = await supabase
         .from("consent_text_versions")
         .select("id")
-        .eq("kind", "anonymous_screening")
+        .eq("kind", kind)
         .order("version", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -113,8 +119,9 @@ export default function NewEchoEncounterPage() {
       id: consentId,
       encounter_id: encounterId,
       text_version_id: verId,
-      kind: "anonymous_screening",
-      method: "verbal_attestation",
+      kind,
+      method,
+      signature_data: signature ?? null,
       clinician_attested_by: userId,
     };
 
@@ -133,33 +140,80 @@ export default function NewEchoEncounterPage() {
   }
 
   // ── Step 1 → 2: Consent accepted ──────────────────────────────────────
-  async function handleConsentComplete(data: {
-    locale: "en" | "ha";
-    verbalAttested: boolean;
-  }) {
-    setState((s) => ({ ...s, locale: data.locale, step: "setup" }));
+  async function handleConsentComplete(data: StepConsentResult) {
+    setState((s) => ({
+      ...s,
+      privacyMode: data.privacyMode,
+      locale: data.locale,
+      signatureMethod: data.signatureMethod,
+      signatureText: data.signatureText,
+      step: "setup",
+    }));
   }
 
   // ── Step 2 → 3: Demographics complete ─────────────────────────────────
   async function handleDemographicsComplete(data: DemographicsData) {
     const encounterId = crypto.randomUUID();
     const consentId = crypto.randomUUID();
+    let patientId: string | null = null;
+    let patientName: string | null = null;
+    let patientCode: string | null = null;
+
+    const supabase = createClient();
 
     try {
+      if (state.privacyMode === "identified") {
+        if (data.existingPatientId) {
+          patientId = data.existingPatientId;
+          patientName = data.fullName || "Patient";
+        } else {
+          // Create new patient
+          patientId = crypto.randomUUID();
+          patientCode = generatePatientCode();
+          patientName = data.fullName || "Patient";
+
+          const formattedPhone = data.phone
+            ? data.phone.startsWith("+")
+              ? data.phone
+              : `+234${data.phone.replace(/^0/, "")}`
+            : null;
+
+          const patientPayload = {
+            id: patientId,
+            organization_id: activeFacility.organizationId,
+            facility_id: activeFacility.facilityId,
+            patient_code: patientCode,
+            full_name: patientName,
+            phone_e164: formattedPhone,
+            age_band: data.ageBand,
+            sex: data.sex === "other_not_stated" ? ("unknown" as const) : data.sex,
+            pregnancy_status: data.pregnancyStatus ?? null,
+            occupation_type: data.occupationType,
+            created_by: userId,
+          };
+
+          try {
+            await supabase.from("patients").upsert(patientPayload, { onConflict: "id" });
+          } catch (pErr) {
+            console.warn("Direct patient upsert note:", pErr);
+          }
+          await syncController.enqueue("patient", patientId, "insert", patientPayload);
+        }
+      }
+
       const encounterPayload = {
         id: encounterId,
         organization_id: activeFacility.organizationId,
         facility_id: activeFacility.facilityId,
         clinician_id: userId,
-        patient_id: null,
+        patient_id: patientId,
         encounter_code: encounterCode,
-        session_code: sessionCode,
+        session_code: state.privacyMode === "anonymous" ? sessionCode : null,
         workflow_mode: "echo" as const,
-        privacy_mode: "anonymous" as const,
+        privacy_mode: state.privacyMode,
         status: "in_progress" as const,
       };
 
-      const supabase = createClient();
       await supabase
         .from("encounters")
         .upsert(encounterPayload, { onConflict: "id" });
@@ -170,21 +224,18 @@ export default function NewEchoEncounterPage() {
         encounterPayload
       );
 
-      // Snapshot demographics for the encounter (all new fields)
+      // Snapshot demographics for the encounter
       const demoPayload = {
         encounter_id: encounterId,
-        // age_band kept for backward compat — derive a band from exact age
-        age_band: data.ageExact
-          ? data.ageExact < 5
-            ? "0_4"
-            : data.ageExact < 15
-            ? "5_14"
-            : data.ageExact < 25
-            ? "15_24"
-            : data.ageExact < 50
-            ? "25_49"
-            : "50_plus"
-          : "unknown",
+        full_name: state.privacyMode === "identified" ? (data.fullName ?? patientName) : null,
+        phone_e164:
+          state.privacyMode === "identified" && data.phone
+            ? data.phone.startsWith("+")
+              ? data.phone
+              : `+234${data.phone.replace(/^0/, "")}`
+            : null,
+        patient_code: patientCode,
+        age_band: data.ageBand,
         age_exact: data.ageExact ?? null,
         sex: data.sex === "other_not_stated"
           ? ("unknown" as const)
@@ -213,10 +264,30 @@ export default function NewEchoEncounterPage() {
         demoPayload
       );
 
-      // Save verbal consent
-      await saveConsentRecord(encounterId, consentId, anonConsentText?.id);
+      // Save consent record according to mode
+      if (state.privacyMode === "identified") {
+        const method =
+          state.signatureMethod === "draw" ? "drawn_signature" : "typed_signature";
+        await saveConsentRecord(
+          encounterId,
+          consentId,
+          "identified_referral",
+          method,
+          state.signatureText,
+          identifiedConsentText?.id
+        );
+      } else {
+        await saveConsentRecord(
+          encounterId,
+          consentId,
+          "anonymous_screening",
+          "verbal_attestation",
+          undefined,
+          anonConsentText?.id
+        );
+      }
 
-      // AC8 edge case: logging an encounter replaces the zero report
+      // Logging an encounter updates daily zero report
       setHasEncounterToday();
     } catch (err) {
       console.warn("Demographics complete note:", err);
@@ -225,7 +296,9 @@ export default function NewEchoEncounterPage() {
     setState((s) => ({
       ...s,
       encounterId,
-      sessionCode,
+      patientId,
+      patientName,
+      sessionCode: state.privacyMode === "anonymous" ? sessionCode : null,
       consentId,
       step: "syndrome",
     }));
@@ -296,6 +369,11 @@ export default function NewEchoEncounterPage() {
     <div className="w-full flex flex-col gap-2 pb-12">
       {/* Top Header */}
       <EncounterHeader
+        title={
+          state.privacyMode === "identified" && state.patientName
+            ? state.patientName
+            : "Create new encounter"
+        }
         onBack={() => {
           if (state.step === "privacy") {
             router.back();
@@ -313,14 +391,18 @@ export default function NewEchoEncounterPage() {
         }}
       />
 
-      {/* Step 1 — AC1: Anonymous-only consent */}
+      {/* Step 1: Consent (Identified or Anonymous) */}
       {state.step === "privacy" && (
-        <StepConsent onContinue={handleConsentComplete} />
+        <StepConsent
+          initialMode={state.privacyMode}
+          onContinue={handleConsentComplete}
+        />
       )}
 
-      {/* Step 2 — AC2: Demographics with insurance, distance, visit type */}
+      {/* Step 2: Demographics */}
       {state.step === "setup" && (
         <StepDemographics
+          privacyMode={state.privacyMode}
           sessionCode={sessionCode}
           onGenerateNewCode={() => setSessionCode(generateSessionCode())}
           onContinue={handleDemographicsComplete}
@@ -328,7 +410,7 @@ export default function NewEchoEncounterPage() {
         />
       )}
 
-      {/* Step 3 — AC3: Individual symptom tiles + AC4: IDSR category for unusual */}
+      {/* Step 3: Syndrome / Danger Signs */}
       {state.step === "syndrome" && state.encounterId && (
         <StepSyndrome
           sessionCode={state.sessionCode ?? undefined}
@@ -345,7 +427,7 @@ export default function NewEchoEncounterPage() {
         />
       )}
 
-      {/* Step 4 — AC5: Follow-up questions with severity sub-question */}
+      {/* Step 4: Questions */}
       {state.step === "questions" &&
         state.encounterId &&
         state.syndromeIds.length > 0 && (
@@ -354,7 +436,8 @@ export default function NewEchoEncounterPage() {
             syndromeLabels={state.syndromeLabels}
             encounterId={state.encounterId}
             encounterCode={encounterCode}
-            isAnonymous
+            patientName={state.patientName ?? undefined}
+            isAnonymous={state.privacyMode === "anonymous"}
             sessionCode={state.sessionCode ?? undefined}
             onPrevious={() => setState((s) => ({ ...s, step: "syndrome" }))}
             onComplete={(questionSetId, answers) =>
@@ -363,7 +446,7 @@ export default function NewEchoEncounterPage() {
           />
         )}
 
-      {/* Step 5 — Triage */}
+      {/* Step 5: Triage */}
       {state.step === "triage" &&
         state.encounterId &&
         state.syndromeIds.length > 0 &&
@@ -381,28 +464,32 @@ export default function NewEchoEncounterPage() {
                 triageGuidanceEn: outcome.guidanceEn,
                 triageIpcGuidanceEn: outcome.ipcGuidanceEn,
                 referralRequired: outcome.referralRequired,
-                // Always offer referral regardless of severity (AC6 edge case)
                 step: "referral",
               }))
             }
           />
         )}
 
-      {/* Step 6 — AC6 & AC7: Final screen + referral code */}
+      {/* Step 6: Referral */}
       {state.step === "referral" && state.encounterId && (
         <StepReferral
           encounterId={state.encounterId}
-          privacyMode="anonymous"
-          consentId={null}
+          privacyMode={state.privacyMode}
+          consentId={state.consentId}
+          patientName={state.patientName ?? undefined}
           onComplete={() => setState((s) => ({ ...s, step: "complete" }))}
         />
       )}
 
-      {/* Step 7 — Complete */}
+      {/* Step 7: Complete */}
       {state.step === "complete" && state.encounterId && (
         <EncounterCompletedModal
-          patientName="Anonymous patient"
-          isAnonymous
+          patientName={
+            state.privacyMode === "identified"
+              ? state.patientName ?? "Patient"
+              : "Anonymous patient"
+          }
+          isAnonymous={state.privacyMode === "anonymous"}
           onReturnHome={() => completeEncounter(state.encounterId!)}
         />
       )}
