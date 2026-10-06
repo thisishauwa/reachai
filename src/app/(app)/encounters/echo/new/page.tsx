@@ -337,25 +337,28 @@ export default function NewEchoEncounterPage() {
       const completedAt = new Date().toISOString();
       const supabase = createClient();
 
-      const { error: rpcError } = await supabase.rpc(
-        "complete_encounter" as never,
-        { p_encounter_id: encounterId } as never
-      );
+      // 1. Direct encounters update in Supabase (confirmed working)
+      const { error: updateError } = await supabase
+        .from("encounters")
+        .update({ status: "completed", completed_at: completedAt })
+        .eq("id", encounterId);
 
-      if (rpcError) {
-        const { error: updateError } = await supabase
-          .from("encounters")
-          .update({ status: "completed", completed_at: completedAt })
-          .eq("id", encounterId);
-
-        if (
-          updateError &&
-          !updateError.message?.includes("Completed encounters are immutable")
-        ) {
-          console.warn("Direct encounters update note:", updateError);
-        }
+      if (
+        updateError &&
+        !updateError.message?.includes("Completed encounters are immutable")
+      ) {
+        console.warn("Direct encounters update note:", updateError);
       }
 
+      // 2. Try RPC if present
+      try {
+        await supabase.rpc(
+          "complete_encounter" as never,
+          { p_encounter_id: encounterId } as never
+        );
+      } catch {}
+
+      // 3. Mark completed in Dexie local drafts
       try {
         await db.draftEncounters.update(encounterId, { status: "completed" });
         const pendingForEncounter = await db.outbox
@@ -371,21 +374,21 @@ export default function NewEchoEncounterPage() {
         console.warn("Dexie local update note:", dexieErr);
       }
 
+      // 4. Enqueue status update in sync queue
       try {
-        syncController.flush().catch((e) =>
-          console.warn("Background sync note:", e)
-        );
-      } catch {}
+        await syncController.enqueueAndSync("encounter_status", encounterId, "update", {
+          id: encounterId,
+          status: "completed",
+          completed_at: completedAt,
+        });
+      } catch (syncErr) {
+        console.warn("Sync queue note:", syncErr);
+      }
 
       await queryClient.invalidateQueries({ queryKey: ["encounters"] });
       await queryClient.invalidateQueries({ queryKey: ["referrals"] });
-      toast.success("Encounter completed");
-      router.push("/home");
     } catch (err) {
       console.error("Failed to complete encounter:", err);
-      await queryClient.invalidateQueries({ queryKey: ["encounters"] });
-      toast.success("Encounter completed");
-      router.push("/home");
     } finally {
       setCompleting(false);
     }
@@ -455,22 +458,32 @@ export default function NewEchoEncounterPage() {
         <StepSyndrome
           sessionCode={state.sessionCode ?? undefined}
           onPrevious={() => setState((s) => ({ ...s, step: "demographics" }))}
-          onSelect={(symptomCodes, syndromeIds, labels) =>
-            setState((s) => ({
-              ...s,
-              symptomCodes,
-              syndromeIds,
-              syndromeLabels: labels,
-              step: "questions",
-            }))
-          }
+          onSelect={(symptomCodes, syndromeIds, labels) => {
+            if (syndromeIds.length === 0) {
+              // No IDSR danger signs: skip disease questions, go directly to triage
+              setState((s) => ({
+                ...s,
+                symptomCodes,
+                syndromeIds: [],
+                syndromeLabels: labels,
+                step: "triage",
+              }));
+            } else {
+              setState((s) => ({
+                ...s,
+                symptomCodes,
+                syndromeIds,
+                syndromeLabels: labels,
+                step: "questions",
+              }));
+            }
+          }}
         />
       )}
 
       {/* Step 5: Disease-Specific Questions */}
-      {state.step === "questions" &&
-        state.encounterId &&
-        state.syndromeIds.length > 0 && (
+      {state.step === "questions" && state.encounterId && (
+        state.syndromeIds.length > 0 ? (
           <StepQuestions
             syndromeIds={state.syndromeIds}
             syndromeLabels={state.syndromeLabels}
@@ -484,45 +497,57 @@ export default function NewEchoEncounterPage() {
               setState((s) => ({ ...s, questionSetId, answers, step: "triage" }))
             }
           />
-        )}
+        ) : (
+          <div className="bg-[#f9f9f9] rounded-[20px] p-8 flex flex-col items-center text-center gap-4">
+            <p className="text-base font-medium text-[#242b33]">
+              No disease-specific follow-up questions required.
+            </p>
+            <button
+              type="button"
+              onClick={() => setState((s) => ({ ...s, step: "triage" }))}
+              className="px-6 py-3 rounded-[12px] bg-[#0073f3] text-white font-medium text-sm hover:bg-[#0060cb] transition-colors"
+            >
+              Continue to assessment
+            </button>
+          </div>
+        )
+      )}
 
       {/* Step 6: Severity / Triage */}
-      {state.step === "triage" &&
-        state.encounterId &&
-        state.syndromeIds.length > 0 &&
-        state.questionSetId && (
-          <StepTriage
-            encounterId={state.encounterId}
-            syndromeIds={state.syndromeIds}
-            questionSetId={state.questionSetId}
-            answers={state.answers}
-            onDone={(outcome) => {
-              if (outcome.referralRequired) {
-                // Only show referral when clinically indicated (AIR-826)
-                setState((s) => ({
-                  ...s,
-                  triageOutcomeId: outcome.id,
-                  triageSeverity: outcome.severity,
-                  triageGuidanceEn: outcome.guidanceEn,
-                  triageIpcGuidanceEn: outcome.ipcGuidanceEn,
-                  referralRequired: true,
-                  step: "referral",
-                }));
-              } else {
-                // Routine cases: skip referral, complete directly
-                setState((s) => ({
-                  ...s,
-                  triageOutcomeId: outcome.id,
-                  triageSeverity: outcome.severity,
-                  triageGuidanceEn: outcome.guidanceEn,
-                  triageIpcGuidanceEn: outcome.ipcGuidanceEn,
-                  referralRequired: false,
-                  step: "complete",
-                }));
-              }
-            }}
-          />
-        )}
+      {state.step === "triage" && state.encounterId && (
+        <StepTriage
+          encounterId={state.encounterId}
+          syndromeIds={state.syndromeIds}
+          questionSetId={state.questionSetId || "00000000-0000-0000-0000-000000000000"}
+          answers={state.answers}
+          onDone={(outcome) => {
+            if (outcome.referralRequired) {
+              // Only show referral when clinically indicated (AIR-826)
+              setState((s) => ({
+                ...s,
+                triageOutcomeId: outcome.id,
+                triageSeverity: outcome.severity,
+                triageGuidanceEn: outcome.guidanceEn,
+                triageIpcGuidanceEn: outcome.ipcGuidanceEn,
+                referralRequired: true,
+                step: "referral",
+              }));
+            } else {
+              // Routine cases: skip referral, mark completed immediately
+              void completeEncounter(state.encounterId!);
+              setState((s) => ({
+                ...s,
+                triageOutcomeId: outcome.id,
+                triageSeverity: outcome.severity,
+                triageGuidanceEn: outcome.guidanceEn,
+                triageIpcGuidanceEn: outcome.ipcGuidanceEn,
+                referralRequired: false,
+                step: "complete",
+              }));
+            }
+          }}
+        />
+      )}
 
       {/* Step 7: Referral (only when referralRequired) */}
       {state.step === "referral" && state.encounterId && (
@@ -531,7 +556,10 @@ export default function NewEchoEncounterPage() {
           privacyMode={state.privacyMode}
           consentId={state.consentId}
           patientName={state.patientName ?? undefined}
-          onComplete={() => setState((s) => ({ ...s, step: "complete" }))}
+          onComplete={() => {
+            void completeEncounter(state.encounterId!);
+            setState((s) => ({ ...s, step: "complete" }));
+          }}
         />
       )}
 
@@ -544,7 +572,10 @@ export default function NewEchoEncounterPage() {
               : "Anonymous patient"
           }
           isAnonymous={state.privacyMode === "anonymous"}
-          onReturnHome={() => completeEncounter(state.encounterId!)}
+          onReturnHome={() => {
+            toast.success("Encounter completed");
+            router.push("/home");
+          }}
         />
       )}
     </div>

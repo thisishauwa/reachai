@@ -23,6 +23,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEncounter } from "@/lib/queries/encounters";
 import { createClient } from "@/lib/supabase/client";
 import { MobileSubpageHeader } from "@/components/nav/mobile-subpage-header";
+import { cn } from "@/lib/utils";
 
 export default function EncounterDetailPage() {
   const params = useParams();
@@ -38,6 +39,42 @@ export default function EncounterDetailPage() {
   const { data: encounter, isLoading, error } = useEncounter(id);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
+
+  const handleMarkCompleted = async () => {
+    if (!id) return;
+    try {
+      setIsCompleting(true);
+      const supabase = createClient();
+      const completedAt = new Date().toISOString();
+
+      const { error: updateError } = await supabase
+        .from("encounters")
+        .update({ status: "completed", completed_at: completedAt })
+        .eq("id", id);
+
+      if (updateError) throw updateError;
+
+      try {
+        const { syncController } = await import("@/lib/offline/sync");
+        await syncController.enqueueAndSync("encounter_status", id, "update", {
+          id,
+          status: "completed",
+          completed_at: completedAt,
+        });
+      } catch {}
+
+      await queryClient.invalidateQueries({ queryKey: ["encounters"] });
+      toast.success("Encounter marked as completed");
+    } catch (err: unknown) {
+      console.error("Failed to mark encounter as completed:", err);
+      toast.error(
+        err instanceof Error ? err.message : "Failed to complete encounter"
+      );
+    } finally {
+      setIsCompleting(false);
+    }
+  };
 
   const handleDelete = async () => {
     if (!id) return;
@@ -260,11 +297,39 @@ export default function EncounterDetailPage() {
       {/* Overview Status Card */}
       <div className="bg-[#fafafa] rounded-[24px] p-5 sm:p-6 flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#ececec] pb-4">
-          <div className="flex items-center gap-2">
-            <span className="size-2.5 rounded-full bg-[#16a34a]" />
-            <span className="text-sm font-semibold uppercase tracking-wider text-[#16a34a]">
-              {encounter.status === "completed" ? "Completed" : encounter.status}
-            </span>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span
+                className={cn(
+                  "size-2.5 rounded-full",
+                  encounter.status === "completed" ? "bg-[#16a34a]" : "bg-[#f59e0b]"
+                )}
+              />
+              <span
+                className={cn(
+                  "text-sm font-semibold uppercase tracking-wider",
+                  encounter.status === "completed" ? "text-[#16a34a]" : "text-[#b45309]"
+                )}
+              >
+                {encounter.status === "completed" ? "Completed" : "In Progress"}
+              </span>
+            </div>
+
+            {encounter.status !== "completed" && (
+              <button
+                type="button"
+                onClick={handleMarkCompleted}
+                disabled={isCompleting}
+                className="bg-[#0073f3] hover:bg-[#0060cb] text-white px-3 py-1.5 rounded-[10px] text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 shadow-sm"
+              >
+                {isCompleting ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="size-3.5" />
+                )}
+                Mark as completed
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
