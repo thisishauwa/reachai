@@ -15,6 +15,7 @@ import {
 } from "@/lib/reference/codes";
 import { useActiveConsentText } from "@/lib/queries/reference";
 import { EncounterHeader } from "@/components/echo/encounter-header";
+import { StepAge, type AgeData } from "@/components/echo/step-age";
 import { StepConsent, type StepConsentResult } from "@/components/echo/step-consent";
 import { StepDemographics, type DemographicsData } from "@/components/echo/step-demographics";
 import { StepSyndrome } from "@/components/echo/step-syndrome";
@@ -25,9 +26,12 @@ import { EncounterCompletedModal } from "@/components/echo/encounter-completed-m
 import { useZeroReport } from "@/lib/session/use-zero-report";
 import type { PrivacyMode, TriageSeverity } from "@/lib/supabase/database.types";
 
+// New flow per AIR-826:
+// age → consent → demographics → syndrome → questions → triage → referral? → complete
 type EchoStep =
-  | "privacy"
-  | "setup"
+  | "age"
+  | "consent"
+  | "demographics"
   | "syndrome"
   | "questions"
   | "triage"
@@ -45,6 +49,11 @@ interface EchoEncounterState {
   locale: "en" | "ha";
   signatureMethod?: "type" | "draw";
   signatureText?: string;
+  /** Age data from StepAge */
+  ageExact: number | null;
+  ageBand: string;
+  sex: "female" | "male" | "other_not_stated";
+  isMinor: boolean;
   /** Selected individual symptom codes */
   symptomCodes: string[];
   /** Derived IDSR syndrome IDs (sent to backend) */
@@ -60,7 +69,7 @@ interface EchoEncounterState {
 }
 
 const INITIAL_STATE: EchoEncounterState = {
-  step: "privacy",
+  step: "age",
   encounterId: null,
   patientId: null,
   patientName: null,
@@ -68,6 +77,10 @@ const INITIAL_STATE: EchoEncounterState = {
   sessionCode: null,
   consentId: null,
   locale: "en",
+  ageExact: null,
+  ageBand: "25_49_years",
+  sex: "other_not_stated",
+  isMinor: false,
   symptomCodes: [],
   syndromeIds: [],
   syndromeLabels: [],
@@ -139,19 +152,31 @@ export default function NewEchoEncounterPage() {
     }
   }
 
-  // ── Step 1 → 2: Consent accepted ──────────────────────────────────────
-  async function handleConsentComplete(data: StepConsentResult) {
+  // ── Step 1: Age complete ───────────────────────────────────────────────
+  function handleAgeComplete(data: AgeData) {
+    setState((s) => ({
+      ...s,
+      ageExact: data.ageExact,
+      ageBand: data.ageBand,
+      sex: data.sex,
+      isMinor: data.isMinor,
+      step: "consent",
+    }));
+  }
+
+  // ── Step 2: Consent accepted ───────────────────────────────────────────
+  function handleConsentComplete(data: StepConsentResult) {
     setState((s) => ({
       ...s,
       privacyMode: data.privacyMode,
       locale: data.locale,
       signatureMethod: data.signatureMethod,
       signatureText: data.signatureText,
-      step: "setup",
+      step: "demographics",
     }));
   }
 
-  // ── Step 2 → 3: Demographics complete ─────────────────────────────────
+  // ── Step 3: Demographics complete ─────────────────────────────────────
   async function handleDemographicsComplete(data: DemographicsData) {
     const encounterId = crypto.randomUUID();
     const consentId = crypto.randomUUID();
@@ -244,9 +269,10 @@ export default function NewEchoEncounterPage() {
         pregnancy_status: data.pregnancyStatus ?? null,
         occupation_type: data.occupationType,
         insurance_status: data.insuranceStatus,
-        distance_from_outlet: data.distanceFromOutlet,
         education_level: data.educationLevel,
-        visit_type: data.visitType,
+        // Fields removed per AIR-826:
+        // distance_from_outlet: removed
+        // visit_type: removed
       };
 
       try {
@@ -375,12 +401,14 @@ export default function NewEchoEncounterPage() {
             : "Create new encounter"
         }
         onBack={() => {
-          if (state.step === "privacy") {
+          if (state.step === "age") {
             router.back();
-          } else if (state.step === "setup") {
-            setState((s) => ({ ...s, step: "privacy" }));
+          } else if (state.step === "consent") {
+            setState((s) => ({ ...s, step: "age" }));
+          } else if (state.step === "demographics") {
+            setState((s) => ({ ...s, step: "consent" }));
           } else if (state.step === "syndrome") {
-            setState((s) => ({ ...s, step: "setup" }));
+            setState((s) => ({ ...s, step: "demographics" }));
           } else if (state.step === "questions") {
             setState((s) => ({ ...s, step: "syndrome" }));
           } else if (state.step === "triage") {
@@ -391,30 +419,42 @@ export default function NewEchoEncounterPage() {
         }}
       />
 
-      {/* Step 1: Consent (Identified or Anonymous) */}
-      {state.step === "privacy" && (
-        <StepConsent
-          initialMode={state.privacyMode}
-          onContinue={handleConsentComplete}
+      {/* Step 1: Age & Sex */}
+      {state.step === "age" && (
+        <StepAge
+          onContinue={handleAgeComplete}
+          onPrevious={() => router.back()}
         />
       )}
 
-      {/* Step 2: Demographics */}
-      {state.step === "setup" && (
+      {/* Step 2: Consent */}
+      {state.step === "consent" && (
+        <StepConsent
+          initialMode={state.privacyMode}
+          isMinor={state.isMinor}
+          onContinue={handleConsentComplete}
+          onPrevious={() => setState((s) => ({ ...s, step: "age" }))}
+        />
+      )}
+
+      {/* Step 3: Patient Details / Demographics */}
+      {state.step === "demographics" && (
         <StepDemographics
           privacyMode={state.privacyMode}
           sessionCode={sessionCode}
           onGenerateNewCode={() => setSessionCode(generateSessionCode())}
+          initialAge={state.ageExact}
+          initialSex={state.sex}
           onContinue={handleDemographicsComplete}
-          onPrevious={() => setState((s) => ({ ...s, step: "privacy" }))}
+          onPrevious={() => setState((s) => ({ ...s, step: "consent" }))}
         />
       )}
 
-      {/* Step 3: Syndrome / Danger Signs */}
+      {/* Step 4: Danger Signs + Symptom Tiles */}
       {state.step === "syndrome" && state.encounterId && (
         <StepSyndrome
           sessionCode={state.sessionCode ?? undefined}
-          onPrevious={() => setState((s) => ({ ...s, step: "setup" }))}
+          onPrevious={() => setState((s) => ({ ...s, step: "demographics" }))}
           onSelect={(symptomCodes, syndromeIds, labels) =>
             setState((s) => ({
               ...s,
@@ -427,7 +467,7 @@ export default function NewEchoEncounterPage() {
         />
       )}
 
-      {/* Step 4: Questions */}
+      {/* Step 5: Disease-Specific Questions */}
       {state.step === "questions" &&
         state.encounterId &&
         state.syndromeIds.length > 0 && (
@@ -446,7 +486,7 @@ export default function NewEchoEncounterPage() {
           />
         )}
 
-      {/* Step 5: Triage */}
+      {/* Step 6: Severity / Triage */}
       {state.step === "triage" &&
         state.encounterId &&
         state.syndromeIds.length > 0 &&
@@ -456,21 +496,35 @@ export default function NewEchoEncounterPage() {
             syndromeIds={state.syndromeIds}
             questionSetId={state.questionSetId}
             answers={state.answers}
-            onDone={(outcome) =>
-              setState((s) => ({
-                ...s,
-                triageOutcomeId: outcome.id,
-                triageSeverity: outcome.severity,
-                triageGuidanceEn: outcome.guidanceEn,
-                triageIpcGuidanceEn: outcome.ipcGuidanceEn,
-                referralRequired: outcome.referralRequired,
-                step: "referral",
-              }))
-            }
+            onDone={(outcome) => {
+              if (outcome.referralRequired) {
+                // Only show referral when clinically indicated (AIR-826)
+                setState((s) => ({
+                  ...s,
+                  triageOutcomeId: outcome.id,
+                  triageSeverity: outcome.severity,
+                  triageGuidanceEn: outcome.guidanceEn,
+                  triageIpcGuidanceEn: outcome.ipcGuidanceEn,
+                  referralRequired: true,
+                  step: "referral",
+                }));
+              } else {
+                // Routine cases: skip referral, complete directly
+                setState((s) => ({
+                  ...s,
+                  triageOutcomeId: outcome.id,
+                  triageSeverity: outcome.severity,
+                  triageGuidanceEn: outcome.guidanceEn,
+                  triageIpcGuidanceEn: outcome.ipcGuidanceEn,
+                  referralRequired: false,
+                  step: "complete",
+                }));
+              }
+            }}
           />
         )}
 
-      {/* Step 6: Referral */}
+      {/* Step 7: Referral (only when referralRequired) */}
       {state.step === "referral" && state.encounterId && (
         <StepReferral
           encounterId={state.encounterId}
@@ -481,7 +535,7 @@ export default function NewEchoEncounterPage() {
         />
       )}
 
-      {/* Step 7: Complete */}
+      {/* Step 8: Complete */}
       {state.step === "complete" && state.encounterId && (
         <EncounterCompletedModal
           patientName={

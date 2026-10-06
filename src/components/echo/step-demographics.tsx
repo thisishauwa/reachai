@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Check, Hash, RefreshCw, UserCheck } from "lucide-react";
+import { Check, Hash, RefreshCw } from "lucide-react";
 import { usePatients } from "@/lib/queries/patients";
 import { useSession } from "@/lib/session/session-context";
 import type { PrivacyMode } from "@/lib/supabase/database.types";
+import { ageExactToBand } from "@/components/echo/step-age";
 
 export interface DemographicsData {
   fullName?: string;
@@ -17,30 +18,20 @@ export interface DemographicsData {
   sex: "female" | "male" | "other_not_stated";
   pregnancyStatus: "not_pregnant" | "pregnant" | "not_sure" | null;
   insuranceStatus: "no_insurance" | "nhia_or_other";
-  distanceFromOutlet: "under_2km" | "2_5km" | "over_5km";
   educationLevel: "none_primary" | "secondary" | "tertiary";
   occupationType: "trader" | "farmer" | "student" | "other";
-  visitType: "first_visit" | "follow_up";
+  // Removed: distanceFromOutlet, visitType (per AIR-826)
 }
 
 interface StepDemographicsProps {
   privacyMode?: PrivacyMode;
   sessionCode?: string;
   onGenerateNewCode?: () => void;
+  /** Pre-filled age & sex from StepAge */
+  initialAge?: number | null;
+  initialSex?: "female" | "male" | "other_not_stated";
   onContinue: (data: DemographicsData) => void;
   onPrevious?: () => void;
-}
-
-export function ageExactToBand(age: number | null): string {
-  if (age === null || isNaN(age)) return "25_49_years";
-  if (age <= 0) return "0_28_days";
-  if (age < 1) return "1_11_months";
-  if (age <= 4) return "1_4_years";
-  if (age <= 14) return "5_14_years";
-  if (age <= 24) return "15_24_years";
-  if (age <= 49) return "25_49_years";
-  if (age <= 64) return "50_64_years";
-  return "65_plus";
 }
 
 // ── Tile Grid Option Selector ────────────────────────────────────────────────
@@ -137,6 +128,8 @@ export function StepDemographics({
   privacyMode = "identified",
   sessionCode,
   onGenerateNewCode,
+  initialAge,
+  initialSex,
   onContinue,
   onPrevious,
 }: StepDemographicsProps) {
@@ -149,15 +142,13 @@ export function StepDemographics({
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
 
-  // Sentinel Demographic fields
-  const [age, setAge] = useState("");
-  const [sex, setSex] = useState<DemographicsData["sex"] | "">("");
+  // Demographic fields (age & sex come pre-filled from StepAge)
   const [pregnancy, setPregnancy] = useState<DemographicsData["pregnancyStatus"] | "">("");
   const [insurance, setInsurance] = useState<DemographicsData["insuranceStatus"] | "">("");
-  const [distance, setDistance] = useState<DemographicsData["distanceFromOutlet"] | "">("");
   const [education, setEducation] = useState<DemographicsData["educationLevel"] | "">("");
   const [occupation, setOccupation] = useState<DemographicsData["occupationType"] | "">("");
-  const [visitType, setVisitType] = useState<DemographicsData["visitType"] | "">("");
+
+  const sex = initialSex ?? "other_not_stated";
 
   const handleSelectExisting = (patientId: string) => {
     setSelectedPatientId(patientId);
@@ -165,9 +156,6 @@ export function StepDemographics({
     if (!p) return;
     setFullName(p.full_name);
     setPhone(p.phone_e164 ? p.phone_e164.replace(/^\+234/, "0") : "");
-    if (p.sex === "female" || p.sex === "male") {
-      setSex(p.sex);
-    }
     if (p.pregnancy_status === "pregnant" || p.pregnancy_status === "not_pregnant") {
       setPregnancy(p.pregnancy_status);
     }
@@ -183,30 +171,25 @@ export function StepDemographics({
       }
     }
 
-    if (!sex) return toast.error("Please select a sex option");
     if (!pregnancy && sex === "female") return toast.error("Please select pregnancy status");
     if (!insurance) return toast.error("Please select health insurance status");
-    if (!distance) return toast.error("Please select approximate travel distance");
     if (!education) return toast.error("Please select education level");
     if (!occupation) return toast.error("Please select occupation");
-    if (!visitType) return toast.error("Please select visit type");
 
-    const parsedAge = age ? parseInt(age, 10) : null;
-    const band = ageExactToBand(parsedAge);
+    const band = ageExactToBand(initialAge ?? null);
 
     onContinue({
       fullName: privacyMode === "identified" ? fullName.trim() : undefined,
       phone: privacyMode === "identified" && phone.trim() ? phone.trim() : undefined,
-      existingPatientId: privacyMode === "identified" && patientChoice === "existing" ? selectedPatientId : undefined,
-      ageExact: parsedAge,
+      existingPatientId:
+        privacyMode === "identified" && patientChoice === "existing" ? selectedPatientId : undefined,
+      ageExact: initialAge ?? null,
       ageBand: band,
-      sex: sex as DemographicsData["sex"],
+      sex,
       pregnancyStatus: pregnancy || (sex === "female" ? null : "not_pregnant"),
       insuranceStatus: insurance as DemographicsData["insuranceStatus"],
-      distanceFromOutlet: distance as DemographicsData["distanceFromOutlet"],
       educationLevel: education as DemographicsData["educationLevel"],
       occupationType: occupation as DemographicsData["occupationType"],
-      visitType: visitType as DemographicsData["visitType"],
     });
   };
 
@@ -220,10 +203,10 @@ export function StepDemographics({
           {/* Eyebrow & Heading */}
           <div className="flex flex-col gap-1.5">
             <span className="text-[#0590f9] text-xs font-semibold uppercase tracking-wider">
-              Patient Details
+              Step 3 of 6
             </span>
             <h2 className="text-xl sm:text-2xl font-normal text-[#001f3e] leading-snug">
-              <span className="font-medium">Demographics</span> & baseline information
+              <span className="font-medium">Patient Details</span> &amp; background
             </h2>
             <p className="text-sm sm:text-base text-[#6e8298]">
               Bayanan maralafiya da aka tattara don bin diddigin kula da lafiya.
@@ -346,59 +329,25 @@ export function StepDemographics({
             </SectionCard>
           )}
 
-          {/* Age */}
-          <SectionCard
-            title="Age"
-            subtitle="Years completed (Shekaru)"
-          >
-            <input
-              id="age-input"
-              type="number"
-              inputMode="numeric"
-              min={0}
-              max={120}
-              value={age}
-              onChange={(e) => setAge(e.target.value)}
-              placeholder="e.g. 29"
-              className="w-full bg-white rounded-[12px] border border-[#e4e8ec] px-4 py-3.5 text-sm sm:text-base text-[#242b33] placeholder:text-[#a1aebc] outline-none focus:border-[#0073f3] focus:ring-2 focus:ring-[#0073f3]/20 transition-all"
-            />
-          </SectionCard>
-
-          {/* Sex */}
-          <SectionCard title="Sex" subtitle="Jinsi" required>
-            <TileGrid
-              cols={3}
-              value={sex}
-              onChange={(s) => {
-                setSex(s);
-                if (s === "male" && !pregnancy) {
-                  setPregnancy("not_pregnant");
-                }
-              }}
-              options={[
-                { value: "female", label: "Female", sub: "Mace" },
-                { value: "male", label: "Male", sub: "Namiji" },
-                { value: "other_not_stated", label: "Other / Not stated", sub: "Sauran" },
-              ]}
-            />
-          </SectionCard>
-
           {/* Pregnancy Status (if applicable) */}
-          <SectionCard
-            title="Pregnancy status"
-            subtitle="Ciki / care planning only"
-          >
-            <TileGrid
-              cols={1}
-              value={(pregnancy ?? "") as string}
-              onChange={(v) => setPregnancy(v as DemographicsData["pregnancyStatus"])}
-              options={[
-                { value: "not_pregnant", label: "Not pregnant / not applicable", sub: "Ba ciki / ba ya shafi wannan ba" },
-                { value: "pregnant", label: "Pregnant", sub: "Tana da ciki" },
-                { value: "not_sure", label: "Not sure / prefer not to say", sub: "Ba a sani ba / ba a bayyana ba" },
-              ]}
-            />
-          </SectionCard>
+          {sex === "female" && (
+            <SectionCard
+              title="Pregnancy status"
+              subtitle="Ciki / care planning only"
+              required
+            >
+              <TileGrid
+                cols={1}
+                value={(pregnancy ?? "") as string}
+                onChange={(v) => setPregnancy(v as DemographicsData["pregnancyStatus"])}
+                options={[
+                  { value: "not_pregnant", label: "Not pregnant / not applicable", sub: "Ba ciki / ba ya shafi wannan ba" },
+                  { value: "pregnant", label: "Pregnant", sub: "Tana da ciki" },
+                  { value: "not_sure", label: "Not sure / prefer not to say", sub: "Ba a sani ba / ba a bayyana ba" },
+                ]}
+              />
+            </SectionCard>
+          )}
 
           {/* Health Insurance */}
           <SectionCard
@@ -413,24 +362,6 @@ export function StepDemographics({
               options={[
                 { value: "no_insurance", label: "No insurance", sub: "Babu inshora" },
                 { value: "nhia_or_other", label: "NHIA / Other cover", sub: "Yana da inshora" },
-              ]}
-            />
-          </SectionCard>
-
-          {/* Distance */}
-          <SectionCard
-            title="Distance from outlet"
-            subtitle="Nisan tafiya daga wannan kanti / wurin"
-            required
-          >
-            <TileGrid
-              cols={3}
-              value={distance}
-              onChange={setDistance}
-              options={[
-                { value: "under_2km", label: "Under 2 km", sub: "Kasa da 2km" },
-                { value: "2_5km", label: "2–5 km", sub: "Tsakanin 2–5km" },
-                { value: "over_5km", label: "Over 5 km", sub: "Sama da 5km" },
               ]}
             />
           </SectionCard>
@@ -471,23 +402,6 @@ export function StepDemographics({
               ]}
             />
           </SectionCard>
-
-          {/* Visit Type */}
-          <SectionCard
-            title="Visit type"
-            subtitle="Nau'in ziyara"
-            required
-          >
-            <TileGrid
-              cols={2}
-              value={visitType}
-              onChange={setVisitType}
-              options={[
-                { value: "first_visit", label: "First visit", sub: "Ziyara ta farko" },
-                { value: "follow_up", label: "Follow-up", sub: "Ziyarar bin diddigi" },
-              ]}
-            />
-          </SectionCard>
         </div>
       </div>
 
@@ -495,7 +409,7 @@ export function StepDemographics({
       <div className="w-full flex items-center justify-between pt-2 sm:static fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-gray-100 sm:border-0 sm:p-0 sm:bg-transparent z-40">
         <div className="bg-[#f9f3ff] px-4 py-2.5 rounded-full inline-flex items-center">
           <span className="text-[#9175a7] text-sm sm:text-base font-medium">
-            Demographics
+            Patient Details
           </span>
         </div>
         <div className="flex items-center gap-3">

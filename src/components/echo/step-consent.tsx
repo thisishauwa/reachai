@@ -16,12 +16,17 @@ export interface StepConsentResult {
 
 interface StepConsentProps {
   initialMode?: PrivacyMode;
+  /** Whether the patient is under 18 — drives parental vs patient consent */
+  isMinor?: boolean;
   onContinue: (data: StepConsentResult) => void;
+  onPrevious?: () => void;
 }
 
 export function StepConsent({
   initialMode = "identified",
+  isMinor = false,
   onContinue,
+  onPrevious,
 }: StepConsentProps) {
   const [privacyMode, setPrivacyMode] = useState<PrivacyMode>(initialMode);
   const [locale, setLocale] = useState<"en" | "ha">("en");
@@ -102,13 +107,23 @@ export function StepConsent({
           {/* Section Eyebrow and Heading */}
           <div className="flex flex-col gap-1.5">
             <span className="text-[#0590f9] text-xs font-semibold uppercase tracking-wider">
-              Pre-screening
+              Step 2 of 6
             </span>
             <h2 className="text-xl sm:text-2xl font-normal text-[#001f3e] leading-snug">
-              <span className="font-medium">Obtain consent</span> before starting
-              the {privacyMode === "identified" ? "identified" : "anonymous"}{" "}
+              <span className="font-medium">
+                {isMinor ? "Parental / Guardian consent" : "Obtain consent"}
+              </span>{" "}
+              before starting the{" "}
+              {privacyMode === "identified" ? "identified" : "anonymous"}{" "}
               syndromic classification
             </h2>
+            {isMinor && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-[#fff8ec] border border-[#f5c842] rounded-[10px] mt-1">
+                <span className="text-[#c98800] text-xs font-medium">
+                  ⚠️ Patient is under 18 — consent must be obtained from a parent or guardian.
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Mode Banner */}
@@ -175,23 +190,31 @@ export function StepConsent({
           {/* Mode-Specific Consent Content */}
           {privacyMode === "identified" ? (
             <div className="flex flex-col gap-5">
-              {/* Patient Consent Text Box */}
+              {/* Consent Text Box */}
               <div className="bg-white rounded-[12px] p-4 sm:p-5 flex flex-col gap-2">
                 <span className="font-medium text-base text-[#242b33]">
-                  {locale === "en" ? "Patient consent" : "Amincewar maralafiya"}
+                  {isMinor
+                    ? (locale === "en" ? "Parental / Guardian consent" : "Amincewar iyaye / mai kula")
+                    : (locale === "en" ? "Patient consent" : "Amincewar maralafiya")}
                 </span>
                 <p className="text-sm sm:text-base text-[#6e8298] leading-relaxed">
-                  {locale === "en"
-                    ? "I consent to sharing my personal and medical information with the REACH clinic for the purpose of this referral. I understand that my data will be protected under NHREC and GDPR standards, and my participation is voluntary."
-                    : "Na yarda a raba bayanan kaina da na lafiya tare da asibitin REACH domin wannan tura mara lafiya. Na fahimci cewa za a kare bayanan na a karkashin ka'idojin NHREC da GDPR, kuma shiga ta na son raina ne."}
+                  {isMinor
+                    ? (locale === "en"
+                        ? "As parent or legal guardian, I consent to sharing this minor's personal and medical information with the REACH clinic for the purpose of this referral. I understand their data will be protected under NHREC and GDPR standards, and participation is voluntary."
+                        : "A matsayina na iyaye ko mai kula da wannan yaro, na yarda a raba bayanan su na sirri da na lafiya tare da asibitin REACH domin wannan tura mara lafiya. Na fahimci cewa za a kare bayanan su a karkashin ka'idojin NHREC da GDPR, kuma shiga ta son rai ne.")
+                    : (locale === "en"
+                        ? "I consent to sharing my personal and medical information with the REACH clinic for the purpose of this referral. I understand that my data will be protected under NHREC and GDPR standards, and my participation is voluntary."
+                        : "Na yarda a raba bayanan kaina da na lafiya tare da asibitin REACH domin wannan tura mara lafiya. Na fahimci cewa za a kare bayanan na a karkashin ka'idojin NHREC da GDPR, kuma shiga ta na son raina ne.")}
                 </p>
               </div>
 
-              {/* Patient Signature */}
+              {/* Signature */}
               <div className="flex flex-col gap-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs uppercase tracking-wider text-[#6e8298] font-medium">
-                    {locale === "en" ? "Patient signature / Attestation" : "Sa hannun majiyyaci"}
+                    {isMinor
+                      ? (locale === "en" ? "Guardian signature / Attestation" : "Sa hannun mai kula")
+                      : (locale === "en" ? "Patient signature / Attestation" : "Sa hannun majiyyaci")}
                   </span>
                   <div className="bg-[#f2f3f5] p-0.5 rounded-[8px] flex items-center">
                     <button
@@ -315,17 +338,28 @@ export function StepConsent({
       <div className="w-full flex items-center justify-between pt-2 sm:static fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-gray-100 sm:border-0 sm:p-0 sm:bg-transparent z-40">
         <div className="bg-[#f9f3ff] px-4 py-2.5 rounded-full inline-flex items-center">
           <span className="text-[#9175a7] text-sm sm:text-base font-medium">
-            Pre-Screening
+            Consent
           </span>
         </div>
-        <button
-          type="button"
-          id="consent-continue-btn"
-          onClick={handleContinue}
-          className="rounded-[12px] bg-[#0073f3] hover:bg-[#0060cb] text-white px-6 py-3.5 text-sm sm:text-base font-medium transition-colors cursor-pointer shadow-sm"
-        >
-          {locale === "en" ? "Continue to screening" : "Ci gaba zuwa gwajin"}
-        </button>
+        <div className="flex items-center gap-3">
+          {onPrevious && (
+            <button
+              type="button"
+              onClick={onPrevious}
+              className="rounded-[12px] border border-[#e4e8ec] bg-white hover:bg-[#fafafa] text-[#495766] px-5 py-3.5 text-sm sm:text-base font-medium transition-colors cursor-pointer"
+            >
+              Previous
+            </button>
+          )}
+          <button
+            type="button"
+            id="consent-continue-btn"
+            onClick={handleContinue}
+            className="rounded-[12px] bg-[#0073f3] hover:bg-[#0060cb] text-white px-6 py-3.5 text-sm sm:text-base font-medium transition-colors cursor-pointer shadow-sm"
+          >
+            {locale === "en" ? "Continue to screening" : "Ci gaba zuwa gwajin"}
+          </button>
+        </div>
       </div>
     </div>
   );
