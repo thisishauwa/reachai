@@ -21,6 +21,7 @@ function isUuid(val: unknown): boolean {
 export function StepTriage({
   encounterId,
   syndromeIds,
+  generalSymptomCodes = [],
   questionSetId,
   answers = {},
   onDone,
@@ -28,6 +29,7 @@ export function StepTriage({
   encounterId: string;
   /** Multi-syndrome: array of syndrome codes/IDs to evaluate */
   syndromeIds: string[];
+  generalSymptomCodes?: string[];
   questionSetId: string;
   answers?: Record<string, unknown>;
   onDone: (outcome: {
@@ -119,7 +121,11 @@ export function StepTriage({
       }
 
       // 5. Evaluate clinical assessment from answers across all selected syndromes
-      const clinical = evaluateMultiSyndromeTriage(syndromeIds, answers || {});
+      const clinical = evaluateMultiSyndromeTriage(
+        syndromeIds,
+        answers || {},
+        generalSymptomCodes
+      );
 
       // Call Supabase RPC to record triage outcome in the database
       let rpcOutcomeId: string | null = null;
@@ -159,10 +165,27 @@ export function StepTriage({
         triage_rule_id: null,
       };
 
+      if (!rpcOutcomeId) {
+        try {
+          await supabase.from("triage_outcomes").upsert(resolvedOutcome as never, { onConflict: "id" });
+        } catch (e) {
+          console.warn("Direct triage_outcomes upsert note:", e);
+        }
+        try {
+          await syncController.enqueue("triage_evaluation", outcomeId, "insert", resolvedOutcome as unknown as Record<string, unknown>);
+        } catch (e) {
+          console.warn("Offline triage_outcomes sync note:", e);
+        }
+      }
+
       setOutcome(resolvedOutcome);
     } catch (err: unknown) {
       console.warn("Triage evaluation exception:", err);
-      const clinical = evaluateMultiSyndromeTriage(syndromeIds, answers || {});
+      const clinical = evaluateMultiSyndromeTriage(
+        syndromeIds,
+        answers || {},
+        generalSymptomCodes
+      );
       const fallbackOutcome: TriageOutcomeRow = {
         id: crypto.randomUUID(),
         encounter_id: encounterId,
@@ -189,7 +212,7 @@ export function StepTriage({
     } finally {
       setLoading(false);
     }
-  }, [encounterId, syndromeIds, syndromeId, questionSetId, answers]);
+  }, [encounterId, syndromeIds, syndromeId, generalSymptomCodes, questionSetId, answers]);
 
 
   useEffect(() => {

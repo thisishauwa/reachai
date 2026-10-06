@@ -19,6 +19,7 @@ import { StepAge, type AgeData } from "@/components/echo/step-age";
 import { StepConsent, type StepConsentResult } from "@/components/echo/step-consent";
 import { StepDemographics, type DemographicsData } from "@/components/echo/step-demographics";
 import { StepSyndrome } from "@/components/echo/step-syndrome";
+import { StepGeneralSymptoms } from "@/components/echo/step-general-symptoms";
 import { StepQuestions } from "@/components/echo/step-questions";
 import { StepTriage } from "@/components/echo/step-triage";
 import { StepReferral } from "@/components/echo/step-referral";
@@ -26,13 +27,16 @@ import { EncounterCompletedModal } from "@/components/echo/encounter-completed-m
 import { useZeroReport } from "@/lib/session/use-zero-report";
 import type { PrivacyMode, TriageSeverity } from "@/lib/supabase/database.types";
 
-// New flow per AIR-826:
-// age → consent → demographics → syndrome → questions → triage → referral? → complete
+// Flow order per clinical requirements:
+// age → consent → demographics → syndrome (danger signs)
+//   ├── (if danger signs) → questions → triage → referral → complete
+//   └── (if no danger signs) → general_symptoms → triage → complete
 type EchoStep =
   | "age"
   | "consent"
   | "demographics"
   | "syndrome"
+  | "general_symptoms"
   | "questions"
   | "triage"
   | "referral"
@@ -54,7 +58,11 @@ interface EchoEncounterState {
   ageBand: string;
   sex: "female" | "male" | "other_not_stated";
   isMinor: boolean;
-  /** Selected individual symptom codes */
+  /** Selected danger sign codes */
+  dangerSignCodes: string[];
+  /** Selected general / normal symptom codes */
+  generalSymptomCodes: string[];
+  /** Combined symptom codes */
   symptomCodes: string[];
   /** Derived IDSR syndrome IDs (sent to backend) */
   syndromeIds: string[];
@@ -73,7 +81,7 @@ const INITIAL_STATE: EchoEncounterState = {
   encounterId: null,
   patientId: null,
   patientName: null,
-  privacyMode: "identified",
+  privacyMode: "anonymous",
   sessionCode: null,
   consentId: null,
   locale: "en",
@@ -81,6 +89,8 @@ const INITIAL_STATE: EchoEncounterState = {
   ageBand: "25_49_years",
   sex: "other_not_stated",
   isMinor: false,
+  dangerSignCodes: [],
+  generalSymptomCodes: [],
   symptomCodes: [],
   syndromeIds: [],
   syndromeLabels: [],
@@ -170,8 +180,6 @@ export default function NewEchoEncounterPage() {
       ...s,
       privacyMode: data.privacyMode,
       locale: data.locale,
-      signatureMethod: data.signatureMethod,
-      signatureText: data.signatureText,
       step: "demographics",
     }));
   }
@@ -412,10 +420,18 @@ export default function NewEchoEncounterPage() {
             setState((s) => ({ ...s, step: "consent" }));
           } else if (state.step === "syndrome") {
             setState((s) => ({ ...s, step: "demographics" }));
+          } else if (state.step === "general_symptoms") {
+            setState((s) => ({ ...s, step: "syndrome" }));
           } else if (state.step === "questions") {
             setState((s) => ({ ...s, step: "syndrome" }));
           } else if (state.step === "triage") {
-            setState((s) => ({ ...s, step: "questions" }));
+            if (state.dangerSignCodes.length > 0) {
+              setState((s) => ({ ...s, step: "questions" }));
+            } else {
+              setState((s) => ({ ...s, step: "general_symptoms" }));
+            }
+          } else if (state.step === "referral") {
+            setState((s) => ({ ...s, step: "triage" }));
           } else {
             router.back();
           }
@@ -453,24 +469,26 @@ export default function NewEchoEncounterPage() {
         />
       )}
 
-      {/* Step 4: Danger Signs + Symptom Tiles */}
+      {/* Step 4: Danger Signs Screen (IDSR Symptoms) */}
       {state.step === "syndrome" && state.encounterId && (
         <StepSyndrome
           sessionCode={state.sessionCode ?? undefined}
           onPrevious={() => setState((s) => ({ ...s, step: "demographics" }))}
-          onSelect={(symptomCodes, syndromeIds, labels) => {
-            if (syndromeIds.length === 0) {
-              // No IDSR danger signs: skip disease questions, go directly to triage
+          onSelect={(symptomCodes, syndromeIds, labels, hasDangerSigns) => {
+            if (!hasDangerSigns || syndromeIds.length === 0) {
+              // No danger signs selected: skip disease questions, route to Normal Symptoms screen
               setState((s) => ({
                 ...s,
-                symptomCodes,
+                dangerSignCodes: [],
                 syndromeIds: [],
-                syndromeLabels: labels,
-                step: "triage",
+                syndromeLabels: [],
+                step: "general_symptoms",
               }));
             } else {
+              // Danger signs present: route to disease-specific follow-up questions
               setState((s) => ({
                 ...s,
+                dangerSignCodes: symptomCodes,
                 symptomCodes,
                 syndromeIds,
                 syndromeLabels: labels,
@@ -481,7 +499,25 @@ export default function NewEchoEncounterPage() {
         />
       )}
 
-      {/* Step 5: Disease-Specific Questions */}
+      {/* Step 4b: Normal Symptoms Screen (when no danger signs) */}
+      {state.step === "general_symptoms" && state.encounterId && (
+        <StepGeneralSymptoms
+          initialSelected={state.generalSymptomCodes}
+          onPrevious={() => setState((s) => ({ ...s, step: "syndrome" }))}
+          onContinue={(codes, labels) => {
+            setState((s) => ({
+              ...s,
+              generalSymptomCodes: codes,
+              symptomCodes: codes,
+              syndromeIds: [],
+              syndromeLabels: labels,
+              step: "triage",
+            }));
+          }}
+        />
+      )}
+
+      {/* Step 5: Disease-Specific Questions (only for selected danger signs) */}
       {state.step === "questions" && state.encounterId && (
         state.syndromeIds.length > 0 ? (
           <StepQuestions
@@ -513,11 +549,12 @@ export default function NewEchoEncounterPage() {
         )
       )}
 
-      {/* Step 6: Severity / Triage */}
+      {/* Step 6: Severity / Triage Assessment */}
       {state.step === "triage" && state.encounterId && (
         <StepTriage
           encounterId={state.encounterId}
           syndromeIds={state.syndromeIds}
+          generalSymptomCodes={state.generalSymptomCodes}
           questionSetId={state.questionSetId || "00000000-0000-0000-0000-000000000000"}
           answers={state.answers}
           onDone={(outcome) => {

@@ -102,16 +102,7 @@ export function ZeroReportModal({
             <span className="text-xs text-green-600 ml-1">— Babu marasa lafiya</span>
           </button>
 
-          {/* Option 3: No report */}
-          <button
-            type="button"
-            id="zero-report-no-report"
-            onClick={onNoReport}
-            className="w-full h-14 rounded-[14px] border-2 border-[#e4e8ec] bg-[#fafafa] hover:bg-[#f2f3f5] text-[#495766] font-medium text-sm sm:text-base flex items-center justify-center gap-2 transition-colors cursor-pointer"
-          >
-            No report submitted
-            <span className="text-xs text-gray-500 ml-1">— Ba a aika rahoto</span>
-          </button>
+
         </div>
 
         <p className="text-xs text-[#a1aebc] text-center">

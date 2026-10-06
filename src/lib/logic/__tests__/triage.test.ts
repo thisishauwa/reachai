@@ -5,6 +5,7 @@ import {
   evaluateMultiSyndromeTriage,
   type TriageRuleLike,
 } from "../triage";
+import { getFollowUpQuestions } from "../../reference/syndrome-questions";
 
 const emergencyCholera: TriageRuleLike = {
   id: "rule-emergency",
@@ -158,5 +159,59 @@ describe("evaluateMultiSyndromeTriage", () => {
     expect(outcome.referralRequired).toBe(true);
     expect(outcome.conditionCode).toBe("SUSPECTED_VHF");
   });
+
+  it("returns routine care with no referral when only normal symptoms (fever) are present", () => {
+    const outcome = evaluateMultiSyndromeTriage([], {}, ["FEVER"]);
+    expect(outcome.severity).toBe("routine");
+    expect(outcome.referralRequired).toBe(false);
+    expect(outcome.conditionCode).toBe("UNCOMPLICATED_FEVER");
+    expect(outcome.conditionLabelEn).toContain("Uncomplicated Febrile Illness");
+  });
+
+  it("returns routine care with no referral when normal cough is present", () => {
+    const outcome = evaluateMultiSyndromeTriage([], {}, ["COUGH"]);
+    expect(outcome.severity).toBe("routine");
+    expect(outcome.referralRequired).toBe(false);
+    expect(outcome.conditionCode).toBe("MILD_COUGH_URI");
+  });
+
+  it("returns routine care when no danger signs and empty general symptoms are submitted", () => {
+    const outcome = evaluateMultiSyndromeTriage([], {}, []);
+    expect(outcome.severity).toBe("routine");
+    expect(outcome.referralRequired).toBe(false);
+    expect(outcome.conditionCode).toBe("ROUTINE_CARE");
+  });
 });
+
+describe("getFollowUpQuestions (Hardcoded Symptom Questions)", () => {
+  it("returns exact VHF questions for BLEEDING", () => {
+    const questions = getFollowUpQuestions("BLEEDING");
+    expect(questions.length).toBeGreaterThan(0);
+    expect(questions.some((q) => q.code === "FB_SPONTANEOUS_BLEEDING")).toBe(true);
+  });
+
+  it("returns exact Meningitis questions for NECK_STIFFNESS", () => {
+    const questions = getFollowUpQuestions("NECK_STIFFNESS");
+    expect(questions.length).toBeGreaterThan(0);
+    expect(questions.some((q) => q.code === "FNS_NECK_RIGIDITY")).toBe(true);
+  });
+
+  it("returns exact AWD questions for DIARRHEA", () => {
+    const questions = getFollowUpQuestions("DIARRHEA");
+    expect(questions.length).toBeGreaterThan(0);
+    expect(questions.some((q) => q.code === "AWD_DEHYDRATION")).toBe(true);
+  });
+
+  it("returns EMPTY array for normal symptoms like FEVER (never defaults to AWD or bleeding)", () => {
+    const questions = getFollowUpQuestions("FEVER");
+    expect(questions).toEqual([]);
+  });
+
+  it("returns EMPTY array for empty string", () => {
+    const questions = getFollowUpQuestions("");
+    expect(questions).toEqual([]);
+  });
+});
+
+
 

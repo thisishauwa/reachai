@@ -102,12 +102,107 @@ function isRatedSevere(answers: Record<string, unknown>): boolean {
  * Evaluates triage for multiple syndromes and returns the worst (highest-severity) outcome.
  * Used when a patient has more than one chief complaint selected.
  */
+/**
+ * Clinical assessment for general / normal symptoms when no IDSR danger signs are present.
+ * Provides clear advice for PPMVs and Community Pharmacists (rest, hydration, OTC meds, warning signs).
+ * Never triggers a referral.
+ */
+export function evaluateGeneralSymptomsTriage(
+  generalCodes: string[] = []
+): ClinicalTriageOutcome {
+  const codes = generalCodes.map((c) => c.toUpperCase());
+
+  if (codes.includes("FEVER")) {
+    return {
+      severity: "routine",
+      referralRequired: false,
+      conditionCode: "UNCOMPLICATED_FEVER",
+      conditionLabelEn: "Uncomplicated Febrile Illness",
+      conditionLabelHa: "Zazzabi Mara Tsanani",
+      guidanceEn:
+        "Routine Outpatient Care: No IDSR danger signs detected. Advise patient/caregiver on adequate rest and plenty of oral fluids. Dispense antipyretic/analgesic (e.g. Paracetamol) as appropriate for age. Conduct mRDT malaria test if indicated. Red Flag Counseling: Return immediately if danger signs appear (such as stiff neck, abnormal bleeding, yellow eyes, convulsions, or inability to drink).",
+      guidanceHa:
+        "Kula ta Yau da Kullum a Gida: Babu alamomin hatsari. A ba da shawarar hutu da shan ruwa sosai. A ba da maganin zazzabi (Paracetamol) da ya dace. A yi gwajin zazzabin sauro (RDT) idan akwai. A gargadi majiyyaci ya dawo nan take idan wuya ta kafe, jini ya fita, ko ya kasa shan ruwa.",
+      ipcGuidanceEn: null,
+      ipcGuidanceHa: null,
+    };
+  }
+
+  if (codes.includes("COUGH")) {
+    return {
+      severity: "routine",
+      referralRequired: false,
+      conditionCode: "MILD_COUGH_URI",
+      conditionLabelEn: "Upper Respiratory Tract Illness / Mild Cough",
+      conditionLabelHa: "Tari da Murfi Mara Tsanani",
+      guidanceEn:
+        "Supportive Care: Mild cough and respiratory symptoms without fast breathing or chest indrawing. Soothe throat with warm fluids. Advise resting in well-ventilated space. Avoid unnecessary antibiotics. Return if cough persists beyond 2 weeks or if difficulty breathing develops.",
+      guidanceHa:
+        "Kula a Gida: Tari da murfi mara tsanani. A sha ruwan dumi da hutu. A dawo asibiti idan tari ya wuce makonni biyu ko numfashi ya yi wuya.",
+      ipcGuidanceEn: null,
+      ipcGuidanceHa: null,
+    };
+  }
+
+  if (codes.includes("HEADACHE") || codes.includes("BODY_ACHE")) {
+    return {
+      severity: "routine",
+      referralRequired: false,
+      conditionCode: "MILD_BODY_ACHE_HEADACHE",
+      conditionLabelEn: "Tension Headache / Musculoskeletal Aches",
+      conditionLabelHa: "Ciwon Kai da Jiki Mara Tsanani",
+      guidanceEn:
+        "Supportive Care: Mild headache or body aches without danger signs. Advise rest, stress relief, and hydration. Dispense Paracetamol or mild analgesic as needed. Return if fever or neck stiffness develops.",
+      guidanceHa:
+        "Kula a Gida: Ciwon kai da jiki mara tsanani. A ba da shawarar hutu da shan ruwa tare da Paracetamol. A dawo idan zazzabi ko wuya ta kafe.",
+      ipcGuidanceEn: null,
+      ipcGuidanceHa: null,
+    };
+  }
+
+  if (codes.includes("STOMACHACHE") || codes.includes("MILD_DIARRHEA")) {
+    return {
+      severity: "routine",
+      referralRequired: false,
+      conditionCode: "MILD_GI_SYMPTOMS",
+      conditionLabelEn: "Mild Gastrointestinal Discomfort",
+      conditionLabelHa: "Ciwon Ciki Mara Tsanani",
+      guidanceEn:
+        "Supportive Care: Mild abdominal discomfort without dehydration. Maintain fluid intake with ORS and clean water. Continue normal light feeding. Return immediately if blood in stool, persistent vomiting, or high fever occurs.",
+      guidanceHa:
+        "Kula a Gida: Ciwon ciki mara tsanani. A sha ruwan ORS da ruwa mai tsabta. A koma asibiti idan aka ga jini a kashi ko amai ya ki tsayawa.",
+      ipcGuidanceEn: null,
+      ipcGuidanceHa: null,
+    };
+  }
+
+  return {
+    severity: "routine",
+    referralRequired: false,
+    conditionCode: "ROUTINE_CARE",
+    conditionLabelEn: "Routine Care / Home Management",
+    conditionLabelHa: "Kula ta Yau da Kullum a Gida",
+    guidanceEn:
+      "Standard PPMV / CP Advice: No IDSR epidemic danger signs identified. Advise adequate rest, nutritious diet, and good hydration. Provide symptomatic relief medications as indicated. Counsel caregiver to return immediately if danger signs (high fever, stiff neck, yellow eyes, bleeding, convulsions) emerge.",
+    guidanceHa:
+      "Shawarar PPMV / Masanin Magani: Babu alamomin hatsari. A ba da shawarar hutu, abinci mai kyau, da shan ruwa. A gargadi mai kula idan cutar ta karu.",
+    ipcGuidanceEn: null,
+    ipcGuidanceHa: null,
+  };
+}
+
+/**
+ * Evaluates triage for multiple syndromes and returns the worst (highest-severity) outcome.
+ * Used when a patient has more than one chief complaint selected.
+ * When no danger signs are present (syndromeIds is empty), evaluates routine care for general symptoms.
+ */
 export function evaluateMultiSyndromeTriage(
   syndromeIds: string[],
-  answers: Record<string, unknown> = {}
+  answers: Record<string, unknown> = {},
+  generalSymptomCodes: string[] = []
 ): ClinicalTriageOutcome {
   if (syndromeIds.length === 0) {
-    return evaluateClinicalTriage("OTHER", answers);
+    return evaluateGeneralSymptomsTriage(generalSymptomCodes);
   }
   if (syndromeIds.length === 1) {
     return evaluateClinicalTriage(syndromeIds[0], answers);
@@ -124,6 +219,7 @@ export function evaluateMultiSyndromeTriage(
     return worst;
   });
 }
+
 
 export function evaluateClinicalTriage(
   syndromeCodeOrId: string,
@@ -518,7 +614,13 @@ export function evaluateClinicalTriage(
   }
 
   // 9. Other Priority / Unusual Symptoms (IDSR Category 4)
-  if (code.includes("OTHER") || code.includes("UNUSUAL") || code.includes("CATEGORY_4")) {
+  if (
+    code === "OTHER_PRIORITY" ||
+    code === "CATEGORY_4" ||
+    code.startsWith("UNUSUAL") ||
+    code.includes("UNUSUAL") ||
+    code === "IDSR_CATEGORY_4"
+  ) {
     return {
       severity: "urgent",
       referralRequired: true,
@@ -533,6 +635,7 @@ export function evaluateClinicalTriage(
       ipcGuidanceHa: "Kiyaye matakan kariya daga yaduwar cuta har sai an tabbatar da asalin ciwon.",
     };
   }
+
 
   // General rule: If PPMV rates any symptom as severe → always refer
   if (isRatedSevere(answers)) {

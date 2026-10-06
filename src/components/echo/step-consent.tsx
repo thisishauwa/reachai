@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, ShieldCheck, UserCheck, Edit3, Keyboard } from "lucide-react";
+import { Check, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { PrivacyMode } from "@/lib/supabase/database.types";
@@ -10,12 +10,10 @@ export interface StepConsentResult {
   privacyMode: PrivacyMode;
   locale: "en" | "ha";
   verbalAttested?: boolean;
-  signatureMethod?: "type" | "draw";
-  signatureText?: string;
 }
 
 interface StepConsentProps {
-  initialMode?: PrivacyMode;
+  initialMode?: PrivacyMode; // kept for API compat but ignored — always anonymous
   /** Whether the patient is under 18 — drives parental vs patient consent */
   isMinor?: boolean;
   onContinue: (data: StepConsentResult) => void;
@@ -23,48 +21,27 @@ interface StepConsentProps {
 }
 
 export function StepConsent({
-  initialMode = "identified",
   isMinor = false,
   onContinue,
   onPrevious,
 }: StepConsentProps) {
-  const [privacyMode, setPrivacyMode] = useState<PrivacyMode>(initialMode);
   const [locale, setLocale] = useState<"en" | "ha">("en");
   const [verbalAttested, setVerbalAttested] = useState(false);
-  const [signatureMethod, setSignatureMethod] = useState<"type" | "draw">("type");
-  const [signatureText, setSignatureText] = useState("");
 
   const handleContinue = () => {
-    if (privacyMode === "anonymous") {
-      if (!verbalAttested) {
-        toast.error(
-          locale === "en"
-            ? "Please confirm patient verbal consent before continuing"
-            : "Da fatan a tabbatar da amincewar majiyyacin kafin ci gaba"
-        );
-        return;
-      }
-      onContinue({
-        privacyMode: "anonymous",
-        locale,
-        verbalAttested: true,
-      });
-    } else {
-      if (signatureMethod === "type" && !signatureText.trim()) {
-        toast.error(
-          locale === "en"
-            ? "Please enter the patient's full name signature"
-            : "Da fatan a shigar da cikakken sunan majiyyacin a matsayin sa hannu"
-        );
-        return;
-      }
-      onContinue({
-        privacyMode: "identified",
-        locale,
-        signatureMethod,
-        signatureText: signatureText.trim() || "Attested Signature",
-      });
+    if (!verbalAttested) {
+      toast.error(
+        locale === "en"
+          ? "Please confirm patient verbal consent before continuing"
+          : "Da fatan a tabbatar da amincewar majiyyacin kafin ci gaba"
+      );
+      return;
     }
+    onContinue({
+      privacyMode: "anonymous",
+      locale,
+      verbalAttested: true,
+    });
   };
 
   return (
@@ -74,36 +51,6 @@ export function StepConsent({
         <div className="absolute inset-x-4 -bottom-3 h-12 bg-[#f2f3f5] rounded-[20px] -z-10" />
 
         <div className="bg-[#f9f9f9] rounded-[20px] p-6 sm:p-10 flex flex-col gap-6">
-          {/* Top Segmented Mode Switcher */}
-          <div className="w-full flex items-center bg-[#f2f3f5] p-1 rounded-[10px]">
-            <button
-              type="button"
-              id="consent-mode-identified"
-              onClick={() => setPrivacyMode("identified")}
-              className={cn(
-                "flex-1 py-2 text-sm font-medium rounded-[8px] transition-all text-center cursor-pointer",
-                privacyMode === "identified"
-                  ? "bg-white text-[#242b33] shadow-sm"
-                  : "text-[#6e8298] hover:text-[#242b33]"
-              )}
-            >
-              Identified mode
-            </button>
-            <button
-              type="button"
-              id="consent-mode-anonymous"
-              onClick={() => setPrivacyMode("anonymous")}
-              className={cn(
-                "flex-1 py-2 text-sm font-medium rounded-[8px] transition-all text-center cursor-pointer",
-                privacyMode === "anonymous"
-                  ? "bg-white text-[#242b33] shadow-sm"
-                  : "text-[#6e8298] hover:text-[#242b33]"
-              )}
-            >
-              Anonymous mode
-            </button>
-          </div>
-
           {/* Section Eyebrow and Heading */}
           <div className="flex flex-col gap-1.5">
             <span className="text-[#0590f9] text-xs font-semibold uppercase tracking-wider">
@@ -113,9 +60,7 @@ export function StepConsent({
               <span className="font-medium">
                 {isMinor ? "Parental / Guardian consent" : "Obtain consent"}
               </span>{" "}
-              before starting the{" "}
-              {privacyMode === "identified" ? "identified" : "anonymous"}{" "}
-              syndromic classification
+              before starting the syndromic classification
             </h2>
             {isMinor && (
               <div className="flex items-center gap-2 px-3 py-2 bg-[#fff8ec] border border-[#f5c842] rounded-[10px] mt-1">
@@ -126,36 +71,20 @@ export function StepConsent({
             )}
           </div>
 
-          {/* Mode Banner */}
-          {privacyMode === "identified" ? (
-            <div className="bg-[#f0f7ff] rounded-[20px] p-5 flex items-start gap-4">
-              <div className="size-12 rounded-[12px] bg-[#cce3fd] text-[#0073f3] flex items-center justify-center shrink-0">
-                <UserCheck className="size-6" />
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <h3 className="font-medium text-[#242b33] text-base sm:text-lg">
-                  Identified Patient Encounter
-                </h3>
-                <p className="text-sm sm:text-base text-[#6e8298]">
-                  Enables linked referrals, care continuity, and follow-up tracking at the referral facility.
-                </p>
-              </div>
+          {/* Anonymous Banner */}
+          <div className="bg-[#f0f7ff] rounded-[20px] p-5 flex items-start gap-4">
+            <div className="size-12 rounded-[12px] bg-[#cce3fd] text-[#0073f3] flex items-center justify-center shrink-0">
+              <ShieldCheck className="size-6" />
             </div>
-          ) : (
-            <div className="bg-[#f0f7ff] rounded-[20px] p-5 flex items-start gap-4">
-              <div className="size-12 rounded-[12px] bg-[#cce3fd] text-[#0073f3] flex items-center justify-center shrink-0">
-                <ShieldCheck className="size-6" />
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <h3 className="font-medium text-[#242b33] text-base sm:text-lg">
-                  Anonymous syndromic data only
-                </h3>
-                <p className="text-sm sm:text-base text-[#6e8298]">
-                  No personal data or identifiers will be collected in this screening.
-                </p>
-              </div>
+            <div className="flex flex-col gap-0.5">
+              <h3 className="font-medium text-[#242b33] text-base sm:text-lg">
+                Anonymous syndromic data only
+              </h3>
+              <p className="text-sm sm:text-base text-[#6e8298]">
+                No personal data or identifiers will be collected in this screening.
+              </p>
             </div>
-          )}
+          </div>
 
           {/* Language Toggle */}
           <div className="inline-flex bg-[#f2f3f5] p-1 rounded-[8px] self-start">
@@ -187,94 +116,42 @@ export function StepConsent({
             </button>
           </div>
 
-          {/* Mode-Specific Consent Content */}
-          {privacyMode === "identified" ? (
-            <div className="flex flex-col gap-5">
-              {/* Consent Text Box */}
-              <div className="bg-white rounded-[12px] p-4 sm:p-5 flex flex-col gap-2">
-                <span className="font-medium text-base text-[#242b33]">
-                  {isMinor
-                    ? (locale === "en" ? "Parental / Guardian consent" : "Amincewar iyaye / mai kula")
-                    : (locale === "en" ? "Patient consent" : "Amincewar maralafiya")}
-                </span>
-                <p className="text-sm sm:text-base text-[#6e8298] leading-relaxed">
-                  {isMinor
-                    ? (locale === "en"
-                        ? "As parent or legal guardian, I consent to sharing this minor's personal and medical information with the REACH clinic for the purpose of this referral. I understand their data will be protected under NHREC and GDPR standards, and participation is voluntary."
-                        : "A matsayina na iyaye ko mai kula da wannan yaro, na yarda a raba bayanan su na sirri da na lafiya tare da asibitin REACH domin wannan tura mara lafiya. Na fahimci cewa za a kare bayanan su a karkashin ka'idojin NHREC da GDPR, kuma shiga ta son rai ne.")
-                    : (locale === "en"
-                        ? "I consent to sharing my personal and medical information with the REACH clinic for the purpose of this referral. I understand that my data will be protected under NHREC and GDPR standards, and my participation is voluntary."
-                        : "Na yarda a raba bayanan kaina da na lafiya tare da asibitin REACH domin wannan tura mara lafiya. Na fahimci cewa za a kare bayanan na a karkashin ka'idojin NHREC da GDPR, kuma shiga ta na son raina ne.")}
-                </p>
-              </div>
-
-              {/* Signature */}
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs uppercase tracking-wider text-[#6e8298] font-medium">
-                    {isMinor
-                      ? (locale === "en" ? "Guardian signature / Attestation" : "Sa hannun mai kula")
-                      : (locale === "en" ? "Patient signature / Attestation" : "Sa hannun majiyyaci")}
-                  </span>
-                  <div className="bg-[#f2f3f5] p-0.5 rounded-[8px] flex items-center">
-                    <button
-                      type="button"
-                      onClick={() => setSignatureMethod("draw")}
-                      className={cn(
-                        "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[6px] transition-colors cursor-pointer",
-                        signatureMethod === "draw"
-                          ? "bg-white text-[#242b33]"
-                          : "text-[#a1aebc] hover:text-[#495766]"
-                      )}
-                    >
-                      <Edit3 className="size-3.5" />
-                      Draw
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSignatureMethod("type")}
-                      className={cn(
-                        "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[6px] transition-colors cursor-pointer",
-                        signatureMethod === "type"
-                          ? "bg-white text-[#242b33]"
-                          : "text-[#a1aebc] hover:text-[#495766]"
-                      )}
-                    >
-                      <Keyboard className="size-3.5" />
-                      Type
-                    </button>
-                  </div>
-                </div>
-
-                {signatureMethod === "type" ? (
-                  <input
-                    type="text"
-                    id="consent-signature-input"
-                    value={signatureText}
-                    onChange={(e) => setSignatureText(e.target.value)}
-                    placeholder={locale === "en" ? "Enter patient full name" : "Shigar da cikakken sunan majiyyaci"}
-                    className="w-full bg-white rounded-[12px] px-4 py-3.5 text-sm sm:text-base text-[#242b33] placeholder:text-[#a1aebc] outline-none border border-[#e4e8ec] focus:border-[#0073f3] focus:ring-2 focus:ring-[#0073f3]/20 transition-all"
-                  />
+          {/* Consent Content */}
+          <div className="flex flex-col gap-4">
+            {/* Read to patient/guardian box */}
+            <div className="bg-white rounded-[12px] p-4 sm:p-5 flex flex-col gap-2">
+              <span className="font-medium text-sm sm:text-base text-[#0073f3]">
+                {isMinor
+                  ? (locale === "en" ? "Read to parent / guardian" : "Karanta wa iyaye / mai kula")
+                  : (locale === "en" ? "Read to patient" : "Karanta wa majiyyaci")}
+              </span>
+              <p className="text-sm sm:text-base text-[#6e8298] leading-relaxed">
+                {isMinor ? (
+                  locale === "en" ? (
+                    <>
+                      &ldquo;We are collecting symptom information for this child today to help
+                      track community health.{" "}
+                      <span className="font-semibold text-[#242b33]">
+                        We will not ask for the child&apos;s name, phone number, or any
+                        personal details.
+                      </span>{" "}
+                      This is completely anonymous. As the parent or guardian, do you
+                      agree to proceed?&rdquo;
+                    </>
+                  ) : (
+                    <>
+                      &ldquo;Muna tattara bayanan alamun rashin lafiya na wannan yaro a yau
+                      don taimakawa wajen lura da lafiyar al&apos;umma.{" "}
+                      <span className="font-semibold text-[#242b33]">
+                        Ba za mu tambayi sunan yaron, lambar waya, ko wani bayani
+                        na sirri ba.
+                      </span>{" "}
+                      Wannan gaba daya ba a bayyana sunan mai shi ba. A matsayinka na
+                      iyaye ko mai kula, ka yarda mu ci gaba?&rdquo;
+                    </>
+                  )
                 ) : (
-                  <div className="w-full bg-white rounded-[12px] p-6 text-center text-sm text-[#6e8298] border-2 border-dashed border-[#e4e8ec]">
-                    <p className="italic">
-                      {locale === "en"
-                        ? "Patient signature attested / Verbal confirmation with caregiver"
-                        : "Tabbatar da sa hannun majiyyaci ko mai kula"}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-4">
-              {/* Read to patient box */}
-              <div className="bg-white rounded-[12px] p-4 sm:p-5 flex flex-col gap-2">
-                <span className="font-medium text-sm sm:text-base text-[#0073f3]">
-                  {locale === "en" ? "Read to patient" : "Karanta wa majiyyaci"}
-                </span>
-                <p className="text-sm sm:text-base text-[#6e8298] leading-relaxed">
-                  {locale === "en" ? (
+                  locale === "en" ? (
                     <>
                       &ldquo;We are collecting symptom information today to help track
                       community health.{" "}
@@ -295,42 +172,50 @@ export function StepConsent({
                       Wannan gaba daya ba a bayyana sunan mai shi ba. Ka yarda mu
                       ci gaba?&rdquo;
                     </>
-                  )}
-                </p>
-              </div>
-
-              {/* Verbal consent checkbox */}
-              <button
-                type="button"
-                id="verbal-consent-btn"
-                onClick={() => setVerbalAttested((prev) => !prev)}
-                className="bg-white rounded-[12px] p-4 sm:p-5 flex items-start gap-3.5 text-left transition-colors hover:bg-gray-50/80 cursor-pointer border border-[#e4e8ec]"
-              >
-                <div
-                  className={cn(
-                    "size-5 rounded-[4px] mt-0.5 flex items-center justify-center transition-colors shrink-0",
-                    verbalAttested
-                      ? "bg-[#0073f3] text-white"
-                      : "border border-[#c7d2de] bg-white"
-                  )}
-                >
-                  {verbalAttested && <Check className="size-3.5 stroke-[3]" />}
-                </div>
-                <div className="flex flex-col gap-0.5">
-                  <span className="font-medium text-sm sm:text-base text-[#242b33]">
-                    {locale === "en"
-                      ? "Patient has provided verbal consent"
-                      : "Majiyyacin ya bai amincewarsa ta baki"}
-                  </span>
-                  <span className="text-xs sm:text-sm text-[#6e8298]">
-                    {locale === "en"
-                      ? "I confirm that the patient understands this is anonymous and agrees to proceed"
-                      : "Na tabbatar da cewa majiyyacin ya fahimci cewa wannan ba shi da suna kuma ya yarda ya ci gaba"}
-                  </span>
-                </div>
-              </button>
+                  )
+                )}
+              </p>
             </div>
-          )}
+
+            {/* Verbal consent checkbox */}
+            <button
+              type="button"
+              id="verbal-consent-btn"
+              onClick={() => setVerbalAttested((prev) => !prev)}
+              className="bg-white rounded-[12px] p-4 sm:p-5 flex items-start gap-3.5 text-left transition-colors hover:bg-gray-50/80 cursor-pointer border border-[#e4e8ec]"
+            >
+              <div
+                className={cn(
+                  "size-5 rounded-[4px] mt-0.5 flex items-center justify-center transition-colors shrink-0",
+                  verbalAttested
+                    ? "bg-[#0073f3] text-white"
+                    : "border border-[#c7d2de] bg-white"
+                )}
+              >
+                {verbalAttested && <Check className="size-3.5 stroke-[3]" />}
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="font-medium text-sm sm:text-base text-[#242b33]">
+                  {isMinor
+                    ? (locale === "en"
+                        ? "Parent / guardian has provided verbal consent"
+                        : "Iyaye ko mai kula sun bai amincewarsu ta baki")
+                    : (locale === "en"
+                        ? "Patient has provided verbal consent"
+                        : "Majiyyacin ya bai amincewarsa ta baki")}
+                </span>
+                <span className="text-xs sm:text-sm text-[#6e8298]">
+                  {isMinor
+                    ? (locale === "en"
+                        ? "I confirm that the parent or guardian understands this is anonymous and consents on behalf of the child"
+                        : "Na tabbatar da cewa iyaye ko mai kula sun fahimci cewa wannan ba shi da suna kuma sun yarda a madadin yaron")
+                    : (locale === "en"
+                        ? "I confirm that the patient understands this is anonymous and agrees to proceed"
+                        : "Na tabbatar da cewa majiyyacin ya fahimci cewa wannan ba shi da suna kuma ya yarda ya ci gaba")}
+                </span>
+              </div>
+            </button>
+          </div>
         </div>
       </div>
 

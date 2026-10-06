@@ -373,28 +373,7 @@ export default function HomePage() {
               )}
             </button>
 
-            {/* No report submitted */}
-            <button
-              type="button"
-              id="zero-report-no-report-home"
-              onClick={() => handleSetStatus("no_report")}
-              className={cn(
-                "group relative rounded-[16px] px-4 py-3 h-[54px] flex items-center justify-between overflow-clip transition-all border-2 cursor-pointer",
-                todayStatus === "no_report"
-                  ? "bg-[#f1f5f9] border-[#94a3b8]"
-                  : "bg-[#f8fafc] border-transparent hover:border-[#94a3b8] hover:bg-[#f1f5f9]"
-              )}
-            >
-              <div className="flex items-center gap-2.5 min-w-0">
-                <ClipboardX className={cn("size-4 shrink-0", todayStatus === "no_report" ? "text-[#475569]" : "text-[#94a3b8]")} />
-                <span className={cn("text-[13px] font-medium leading-tight truncate", todayStatus === "no_report" ? "text-[#334155]" : "text-[#64748b]")}>
-                  No report submitted
-                </span>
-              </div>
-              {todayStatus === "no_report" && (
-                <CheckCircle2 className="size-4 text-[#94a3b8] shrink-0 ml-1" />
-              )}
-            </button>
+
           </div>
         )}
       </section>

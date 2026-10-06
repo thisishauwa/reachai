@@ -167,24 +167,14 @@ export function TriageBottomSheet({
             <ArrowRight className="size-4" />
           </button>
         ) : (
-          <div className="flex flex-col gap-2">
-            <button
-              type="button"
-              id="confirm-referral-btn"
-              onClick={onConfirmReferral}
-              className="w-full inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-[12px] text-sm sm:text-base font-medium transition-colors cursor-pointer border border-[#0073f3] text-[#0073f3] hover:bg-[#f0f7ff]"
-            >
-              <span>Confirm Referral</span>
-              <ArrowRight className="size-4" />
-            </button>
-            <button
-              type="button"
-              onClick={onCompleteRoutine || onConfirmReferral}
-              className="w-full rounded-[12px] bg-[#0073f3] hover:bg-[#0060cb] text-white px-8 py-3.5 text-sm sm:text-base font-medium transition-colors cursor-pointer"
-            >
-              Complete assessment
-            </button>
-          </div>
+          <button
+            type="button"
+            id="complete-routine-btn"
+            onClick={onCompleteRoutine || onConfirmReferral}
+            className="w-full rounded-[12px] bg-[#0073f3] hover:bg-[#0060cb] text-white px-8 py-3.5 text-sm sm:text-base font-medium transition-colors cursor-pointer shadow-sm"
+          >
+            Complete assessment
+          </button>
         )}
       </div>
     </div>

@@ -50,7 +50,8 @@ interface StepSyndromeProps {
   onSelect: (
     symptomCodes: string[],
     syndromeIds: string[],
-    labels: string[]
+    labels: string[],
+    hasDangerSigns?: boolean
   ) => void;
   onPrevious?: () => void;
 }
@@ -156,8 +157,8 @@ export function StepSyndrome({
           ]
         : []),
     ];
-
-    onSelect(allCodes, syndromeIds, labels);
+    const hasDangerSigns = checked.size > 0 || hasUnusual || dehydration === "severe";
+    onSelect(allCodes, syndromeIds, labels, hasDangerSigns);
   };
 
   return (
@@ -500,13 +501,17 @@ export function StepSyndrome({
             type="button"
             id="symptom-continue-btn"
             onClick={handleContinue}
-            className="rounded-[12px] bg-[#0073f3] hover:bg-[#0060cb] text-white px-8 py-3.5 text-sm sm:text-base font-medium transition-colors cursor-pointer shadow-sm"
+            className="rounded-[12px] bg-[#0073f3] hover:bg-[#0060cb] text-white px-6 sm:px-8 py-3.5 text-sm sm:text-base font-medium transition-colors cursor-pointer shadow-sm flex items-center gap-2"
           >
-            Continue to questions
-            {(checked.size > 0 || hasUnusual) && (
-              <span className="ml-2 text-xs font-normal opacity-80">
-                ({checked.size + (hasUnusual ? 1 : 0)} selected)
-              </span>
+            {checked.size > 0 || hasUnusual || dehydration === "severe" ? (
+              <>
+                <span>Continue to Danger Sign Questions</span>
+                <span className="text-xs font-normal opacity-90 bg-white/20 px-2 py-0.5 rounded-full">
+                  {checked.size + (hasUnusual ? 1 : 0) + (dehydration === "severe" ? 1 : 0)} selected
+                </span>
+              </>
+            ) : (
+              <span>No danger signs — Continue to Normal Symptoms</span>
             )}
           </button>
         </div>

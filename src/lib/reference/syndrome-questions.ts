@@ -342,14 +342,66 @@ export const SYNDROME_FOLLOW_UP_QUESTIONS: Record<string, FollowUpQuestion[]> = 
   ],
 };
 
+/**
+ * Hardcoded symptom-to-follow-up mapping from the ECHO reference protocol.
+ * Returns questions ONLY for exact matching danger signs / syndromes.
+ * Never defaults to AWD or random questions.
+ */
 export function getFollowUpQuestions(syndromeCodeOrId: string): FollowUpQuestion[] {
-  // Normalize code
-  const upper = syndromeCodeOrId.toUpperCase();
-  for (const [key, questions] of Object.entries(SYNDROME_FOLLOW_UP_QUESTIONS)) {
-    if (upper.includes(key) || key.includes(upper)) {
-      return questions;
-    }
+  if (!syndromeCodeOrId) return [];
+  const upper = syndromeCodeOrId.toUpperCase().trim();
+
+  // 1. Acute Watery Diarrhoea
+  if (upper === "ACUTE_WATERY_DIARRHOEA" || upper === "DIARRHEA" || upper === "AWD") {
+    return SYNDROME_FOLLOW_UP_QUESTIONS.ACUTE_WATERY_DIARRHOEA;
   }
-  // Default to Acute Watery Diarrhoea questions if not found
-  return SYNDROME_FOLLOW_UP_QUESTIONS.ACUTE_WATERY_DIARRHOEA;
+
+  // 2. Fever with Bleeding (VHF / Lassa)
+  if (upper === "FEVER_BLEEDING" || upper === "BLEEDING") {
+    return SYNDROME_FOLLOW_UP_QUESTIONS.FEVER_BLEEDING;
+  }
+
+  // 3. Fever with Neck Stiffness (Meningitis)
+  if (upper === "FEVER_NECK_STIFFNESS" || upper === "NECK_STIFFNESS" || upper === "MENINGITIS") {
+    return SYNDROME_FOLLOW_UP_QUESTIONS.FEVER_NECK_STIFFNESS;
+  }
+
+  // 4. Fever with Rash (Measles)
+  if (upper === "FEVER_RASH" || upper === "NEW_RASH" || upper === "RASH" || upper === "MEASLES") {
+    return SYNDROME_FOLLOW_UP_QUESTIONS.FEVER_RASH;
+  }
+
+  // 5. Jaundice (Yellow eyes or skin)
+  if (upper === "JAUNDICE" || upper === "YELLOW_EYES_SKIN") {
+    return SYNDROME_FOLLOW_UP_QUESTIONS.JAUNDICE;
+  }
+
+  // 6. Neonatal Danger Signs / Convulsions
+  if (upper === "NEONATAL_DANGER_SIGNS" || upper === "CONVULSIONS" || upper === "NDS") {
+    return SYNDROME_FOLLOW_UP_QUESTIONS.NEONATAL_DANGER_SIGNS;
+  }
+
+  // 7. Acute Flaccid Paralysis (AFP)
+  if (upper === "ACUTE_FLACCID_PARALYSIS" || upper === "PARALYSIS" || upper === "AFP") {
+    return SYNDROME_FOLLOW_UP_QUESTIONS.ACUTE_FLACCID_PARALYSIS;
+  }
+
+  // 8. Acute Respiratory Illness
+  if (upper === "ACUTE_RESPIRATORY_ILLNESS" || upper === "ARI" || upper === "RESPIRATORY") {
+    return SYNDROME_FOLLOW_UP_QUESTIONS.ACUTE_RESPIRATORY_ILLNESS;
+  }
+
+  // 9. Cough > 2 weeks
+  if (upper === "COUGH_OVER_TWO_WEEKS") {
+    return SYNDROME_FOLLOW_UP_QUESTIONS.COUGH_OVER_TWO_WEEKS;
+  }
+
+  // 10. Other Priority / Unusual Health Event (Category 4)
+  if (upper === "OTHER_PRIORITY" || upper.includes("UNUSUAL") || upper.includes("CATEGORY_4")) {
+    return SYNDROME_FOLLOW_UP_QUESTIONS.OTHER_PRIORITY;
+  }
+
+  // Deterministic safe return: no random fallback
+  return [];
 }
+
