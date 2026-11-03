@@ -19,8 +19,8 @@ import { cn } from "@/lib/utils";
  */
 
 export type ZeroReportStatus =
-  | "no_cases"        // explicit zero report (green)
-  | "no_report"       // explicit no-report by PPMV
+  | "no_cases" // explicit zero report (green)
+  | "no_report" // explicit no-report by PPMV
   | "no_report_auto"; // system-recorded (auto-recorded)
 
 export interface ZeroReportModalProps {
@@ -47,7 +47,7 @@ export function ZeroReportModal({
       aria-modal="true"
       aria-label="Daily reporting reminder"
     >
-      <div className="w-full max-w-[440px] bg-white rounded-[24px] p-6 sm:p-8 flex flex-col gap-5 shadow-2xl animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200">
+      <div className="w-full max-w-110 bg-white rounded-[24px] p-6 sm:p-8 flex flex-col gap-5 shadow-2xl animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200">
         {/* Header */}
         <div className="flex items-start justify-between">
           <div className="flex flex-col gap-0.5">
@@ -88,25 +88,28 @@ export function ZeroReportModal({
             className="w-full h-14 rounded-[14px] bg-[#0073f3] hover:bg-[#0060cb] text-white font-medium text-sm sm:text-base flex items-center justify-center gap-2 transition-colors cursor-pointer"
           >
             I saw patients today
-            <span className="text-xs text-blue-200 ml-1">— Na ga marasa lafiya</span>
+            <span className="text-xs text-blue-200 ml-1">
+              — Na ga marasa lafiya
+            </span>
           </button>
 
-          {/* Option 2: No cases */}
+          {/* Option 2: No patients today */}
           <button
             type="button"
             id="zero-report-no-cases"
             onClick={onNoCases}
             className="w-full h-14 rounded-[14px] border-2 border-[#22c55e] bg-[#f0fdf4] hover:bg-[#dcfce7] text-[#166534] font-medium text-sm sm:text-base flex items-center justify-center gap-2 transition-colors cursor-pointer"
           >
-            No cases seen today
-            <span className="text-xs text-green-600 ml-1">— Babu marasa lafiya</span>
+            No patients today
+            <span className="text-xs text-green-600 ml-1">
+              — Babu marasa lafiya a yau
+            </span>
           </button>
-
-
         </div>
 
         <p className="text-xs text-[#a1aebc] text-center">
-          Dismissing this reminder does not record any status. It will reappear the next time you open the app today.
+          Dismissing this reminder does not record any status. It will reappear
+          the next time you open the app today.
         </p>
       </div>
     </div>
@@ -128,7 +131,7 @@ export function ZeroReportStatusBadge({
     return (
       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-[#dcfce7] text-[#166534]">
         <span className="size-1.5 rounded-full bg-[#22c55e]" />
-        No cases seen
+        No patients today
         {date && <span className="text-green-600 opacity-75">· {date}</span>}
       </span>
     );
@@ -176,7 +179,8 @@ export function FollowUpFlagBadge({
           Follow-up required
         </span>
         <span className="text-[11px] text-[#b45309]">
-          {consecutiveDays} consecutive days without a report. Project team has been flagged.
+          {consecutiveDays} consecutive days without a report. Project team has
+          been flagged.
         </span>
       </div>
     </div>

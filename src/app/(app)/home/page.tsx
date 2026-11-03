@@ -8,15 +8,22 @@ import {
   Plus,
   Info,
   CalendarX,
-  ClipboardX,
   CheckCircle2,
+  Megaphone,
+  ClipboardCheck,
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { useSession } from "@/lib/session/session-context";
 import { useRecentPatients } from "@/lib/queries/patients";
-import { useRecentEncounters } from "@/lib/queries/encounters";
-import { usePendingReferralAlert } from "@/lib/queries/referrals";
+import {
+  useRecentEncounters,
+  useEncounterTally,
+} from "@/lib/queries/encounters";
+import {
+  usePendingReferralAlert,
+  useClinicResultsAlert,
+} from "@/lib/queries/referrals";
 import { NotificationBell } from "@/components/notifications/notification-bell";
 import { MobileNavMenu } from "@/components/nav/mobile-nav-menu";
 import type { WorkflowMode } from "@/lib/supabase/database.types";
@@ -77,6 +84,12 @@ export default function HomePage() {
   const { data: patients = [] } = useRecentPatients(facilityId, 5);
   const { data: encounters = [] } = useRecentEncounters(facilityId, 5);
   const { data: pendingReferral } = usePendingReferralAlert(facilityId);
+  const { data: tally } = useEncounterTally(facilityId);
+  const { data: clinicResults } = useClinicResultsAlert(facilityId ?? "");
+
+  // AC7 — tapping "No patients today" after encounters are already logged is
+  // not blocked, but is flagged for review rather than counted as a zero.
+  const [showFlaggedConfirm, setShowFlaggedConfirm] = useState(false);
 
   if (!workflowMode) return null;
 
@@ -91,24 +104,34 @@ export default function HomePage() {
   // ── Zero report helpers ──────────────────────────────────────────────────
 
   function handleSetStatus(status: "no_cases" | "no_report") {
+    // AC7: encounters are already logged today — not blocked, but flagged
+    // for review rather than counted as a zero report.
+    if (status === "no_cases" && todayStatus === "encounter") {
+      setShowFlaggedConfirm(true);
+      return;
+    }
     // AC edge case: confirm before overwriting a same-day status
-    if (
-      todayStatus &&
-      todayStatus !== "encounter" &&
-      todayStatus !== status
-    ) {
+    if (todayStatus && todayStatus !== "encounter" && todayStatus !== status) {
       setPendingStatus(status);
       return;
     }
     applyStatus(status);
   }
 
+  function confirmFlaggedNoPatientsToday() {
+    setTodayStatus("no_cases");
+    toast.warning(
+      "Recorded, but flagged for review — encounters were already logged today.",
+    );
+    setShowFlaggedConfirm(false);
+  }
+
   function applyStatus(status: "no_cases" | "no_report") {
     setTodayStatus(status);
     toast.success(
       status === "no_cases"
-        ? "Recorded: No cases seen today"
-        : "Recorded: No report submitted"
+        ? "Recorded: No patients today"
+        : "Recorded: No report submitted",
     );
     setPendingStatus(null);
   }
@@ -136,19 +159,21 @@ export default function HomePage() {
       {/* Overwrite confirmation dialog */}
       {pendingStatus && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-[2px]">
-          <div className="w-full max-w-[360px] bg-white rounded-[20px] p-6 flex flex-col gap-4 shadow-2xl animate-in zoom-in-95 duration-150">
-            <h3 className="font-semibold text-[#242b33]">Change today's status?</h3>
+          <div className="w-full max-w-90 bg-white rounded-[20px] p-6 flex flex-col gap-4 shadow-2xl animate-in zoom-in-95 duration-150">
+            <h3 className="font-semibold text-[#242b33]">
+              Change today's status?
+            </h3>
             <p className="text-sm text-[#6e8298]">
               You already recorded{" "}
               <strong>
                 {todayStatus === "no_cases"
-                  ? "No cases seen today"
+                  ? "No patients today"
                   : "No report submitted"}
               </strong>{" "}
               for today. Do you want to change it to{" "}
               <strong>
                 {pendingStatus === "no_cases"
-                  ? "No cases seen today"
+                  ? "No patients today"
                   : "No report submitted"}
               </strong>
               ?
@@ -171,6 +196,96 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* AC7 — encounters already logged today; not blocked, flagged for review */}
+      {showFlaggedConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-[2px]">
+          <div className="w-full max-w-[360px] bg-white rounded-[20px] p-6 flex flex-col gap-4 shadow-2xl animate-in zoom-in-95 duration-150">
+            <h3 className="font-semibold text-[#242b33]">
+              Encounters already logged today
+            </h3>
+            <p className="text-sm text-[#6e8298]">
+              This day already has recorded encounters. Reporting “No patients
+              today” now will be <strong>flagged for review</strong>, not
+              counted as a genuine zero report.
+            </p>
+            <p className="text-xs text-[#a1aebc] italic">
+              An riga an rubuta ziyara a yau. Za a yiwa wannan alama domin
+              dubawa, ba za a kirga shi a matsayin rahoton sifili ba.
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShowFlaggedConfirm(false)}
+                className="flex-1 h-11 rounded-[12px] border border-[#e4e8ec] bg-white text-[#495766] font-medium text-sm hover:bg-[#fafafa] transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                id="confirm-flagged-no-patients-btn"
+                onClick={confirmFlaggedNoPatientsToday}
+                className="flex-1 h-11 rounded-[12px] bg-[#0073f3] hover:bg-[#0060cb] text-white font-medium text-sm transition-colors cursor-pointer"
+              >
+                Report anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Outlet + date (spec v0.3 Home screen) */}
+      <div className="flex items-center justify-between gap-2 text-xs sm:text-sm text-[#6e8298]">
+        <span className="font-medium text-[#495766]">
+          Outlet {activeFacility?.facilityCode ?? "—"}
+          {activeFacility?.facilityName
+            ? ` · ${activeFacility.facilityName}`
+            : ""}
+        </span>
+        <span>{format(new Date(), "EEEE, d MMMM")}</span>
+      </div>
+
+      {/* Ward alert — illustrative placeholder; wiring to a real alerts feed
+          is a backend concern out of scope for this ticket. Blue, not amber:
+          amber is reserved for IPC protective instructions elsewhere in the
+          app (spec v0.3 edge case — confirm with ECHO lead). */}
+      <div className="bg-[#f0f7ff] border border-[#cce3fd] rounded-[16px] sm:rounded-[20px] p-4 flex items-start gap-3">
+        <div className="size-9 rounded-[10px] bg-[#cce3fd] text-[#0073f3] flex items-center justify-center shrink-0">
+          <Megaphone className="size-4.5" />
+        </div>
+        <div className="flex flex-col gap-0.5 min-w-0">
+          <span className="text-[11px] font-bold tracking-wider text-[#0073f3] uppercase">
+            Alert for your ward
+          </span>
+          <p className="text-sm text-[#242b33] leading-snug">
+            Watch for cholera-pattern cases rising nearby. Check your ORS stock.
+          </p>
+          <p className="text-xs text-[#6e8298] italic">
+            Lura da karuwar alamomin kwalara a kusa. Duba kayan ORS.
+          </p>
+        </div>
+      </div>
+
+      {/* Results from the clinic */}
+      {clinicResults && clinicResults.count > 0 && (
+        <Link
+          href="/referrals"
+          className="bg-[#f0fdf4] border border-[#bbf7d0] rounded-[16px] sm:rounded-[20px] p-4 flex items-center gap-3 transition-colors hover:bg-[#dcfce7]"
+        >
+          <div className="size-9 rounded-[10px] bg-[#bbf7d0] text-[#166534] flex items-center justify-center shrink-0">
+            <ClipboardCheck className="size-4.5" />
+          </div>
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <span className="text-[11px] font-bold tracking-wider text-[#166534] uppercase">
+              Results from the clinic
+            </span>
+            <p className="text-sm text-[#242b33] leading-snug">
+              {clinicResults.count} new result
+              {clinicResults.count > 1 ? "s" : ""} for a patient you referred
+            </p>
+          </div>
+        </Link>
       )}
 
       {/* Top Header */}
@@ -228,7 +343,7 @@ export default function HomePage() {
             <span
               className={cn(
                 "size-2.5 rounded-full",
-                workflowMode === "reach" ? "bg-[#0073F3]" : "bg-[#B593D1]"
+                workflowMode === "reach" ? "bg-[#0073F3]" : "bg-[#B593D1]",
               )}
             />
             <span className="text-sm sm:text-base font-medium text-[#495766]">
@@ -238,7 +353,7 @@ export default function HomePage() {
           <ChevronDown
             className={cn(
               "size-4 text-[#495766] transition-transform duration-150",
-              switcherOpen && "rotate-180"
+              switcherOpen && "rotate-180",
             )}
           />
         </button>
@@ -267,7 +382,7 @@ export default function HomePage() {
                 "flex items-center gap-2.5 px-3.5 py-2.5 rounded-[10px] text-sm text-left transition-colors cursor-pointer",
                 workflowMode === "echo"
                   ? "bg-[#f9f5fd] text-[#703da6] font-medium"
-                  : "hover:bg-[#fafafa] text-[#242b33]"
+                  : "hover:bg-[#fafafa] text-[#242b33]",
               )}
             >
               <span className="size-2 rounded-full bg-[#B593D1]" />
@@ -299,7 +414,9 @@ export default function HomePage() {
                 <div className="text-[14px] md:text-[15px] font-medium text-[#0057b7] z-10 leading-tight">
                   <span className="md:hidden">Start ECHO Encounter</span>
                   <span className="hidden md:block">
-                    Start ECHO<br />Encounter
+                    Start ECHO
+                    <br />
+                    Encounter
                   </span>
                 </div>
                 <div className="size-[32px] md:size-[36px] rounded-full border border-[#0057b7] text-[#0057b7] flex items-center justify-center shrink-0 z-10">
@@ -320,7 +437,9 @@ export default function HomePage() {
                 <div className="text-[14px] md:text-[15px] font-medium text-[#0057b7] z-10 leading-tight">
                   <span className="md:hidden">View Referrals</span>
                   <span className="hidden md:block">
-                    View<br />Referrals
+                    View
+                    <br />
+                    Referrals
                   </span>
                 </div>
                 <div className="size-[32px] md:size-[36px] rounded-full border border-[#0057b7] text-[#0057b7] flex items-center justify-center shrink-0 z-10">
@@ -349,34 +468,90 @@ export default function HomePage() {
 
         {/* AC8 — Zero Reporting quick actions (≤ 2 taps from home) */}
         {workflowMode === "echo" && (
-          <div className="grid grid-cols-2 gap-2 sm:gap-2.5 mt-1">
-            {/* No cases seen today */}
-            <button
-              type="button"
-              id="zero-report-no-cases-home"
-              onClick={() => handleSetStatus("no_cases")}
-              className={cn(
-                "group relative rounded-[16px] px-4 py-3 h-[54px] flex items-center justify-between overflow-clip transition-all border-2 cursor-pointer",
-                todayStatus === "no_cases"
-                  ? "bg-[#dcfce7] border-[#22c55e]"
-                  : "bg-[#f0fdf4] border-transparent hover:border-[#22c55e] hover:bg-[#dcfce7]"
-              )}
-            >
-              <div className="flex items-center gap-2.5 min-w-0">
-                <CalendarX className={cn("size-4 shrink-0", todayStatus === "no_cases" ? "text-[#166534]" : "text-[#22c55e]")} />
-                <span className={cn("text-[13px] font-medium leading-tight truncate", todayStatus === "no_cases" ? "text-[#166534]" : "text-[#15803d]")}>
-                  No cases seen today
-                </span>
-              </div>
-              {todayStatus === "no_cases" && (
-                <CheckCircle2 className="size-4 text-[#22c55e] shrink-0 ml-1" />
-              )}
-            </button>
-
-
+          <div className="flex flex-col gap-1.5 mt-1">
+            <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
+              {/* No patients today */}
+              <button
+                type="button"
+                id="zero-report-no-cases-home"
+                onClick={() => handleSetStatus("no_cases")}
+                className={cn(
+                  "group relative rounded-[16px] px-4 py-3 h-[54px] flex items-center justify-between overflow-clip transition-all border-2 cursor-pointer",
+                  todayStatus === "no_cases"
+                    ? "bg-[#dcfce7] border-[#22c55e]"
+                    : "bg-[#f0fdf4] border-transparent hover:border-[#22c55e] hover:bg-[#dcfce7]",
+                )}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <CalendarX
+                    className={cn(
+                      "size-4 shrink-0",
+                      todayStatus === "no_cases"
+                        ? "text-[#166534]"
+                        : "text-[#22c55e]",
+                    )}
+                  />
+                  <span
+                    className={cn(
+                      "text-[13px] font-medium leading-tight truncate",
+                      todayStatus === "no_cases"
+                        ? "text-[#166534]"
+                        : "text-[#15803d]",
+                    )}
+                  >
+                    No patients today
+                  </span>
+                </div>
+                {todayStatus === "no_cases" && (
+                  <CheckCircle2 className="size-4 text-[#22c55e] shrink-0 ml-1" />
+                )}
+              </button>
+            </div>
+            {/* AC6 — helper text explaining why zero reporting matters */}
+            <p className="text-[11px] sm:text-xs text-[#6e8298] px-1 leading-snug">
+              Tap this only when nobody came in with symptoms today. Without it
+              the dashboard cannot tell a quiet day apart from a day you did not
+              report.
+            </p>
           </div>
         )}
       </section>
+
+      {/* Today / this-week tally (spec v0.3 Home screen — recorded + referred counts) */}
+      {workflowMode === "echo" && (
+        <section className="grid grid-cols-2 gap-2.5">
+          <div className="bg-[#fafafa] rounded-[16px] sm:rounded-[20px] p-4 flex flex-col gap-1">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-[#6e8298]">
+              Today
+            </span>
+            <span className="text-sm sm:text-base text-[#242b33]">
+              <strong className="font-semibold">
+                {tally?.todayRecorded ?? 0}
+              </strong>{" "}
+              recorded ·{" "}
+              <strong className="font-semibold">
+                {tally?.todayReferred ?? 0}
+              </strong>{" "}
+              referred
+            </span>
+          </div>
+          <div className="bg-[#fafafa] rounded-[16px] sm:rounded-[20px] p-4 flex flex-col gap-1">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-[#6e8298]">
+              This week
+            </span>
+            <span className="text-sm sm:text-base text-[#242b33]">
+              <strong className="font-semibold">
+                {tally?.weekRecorded ?? 0}
+              </strong>{" "}
+              recorded ·{" "}
+              <strong className="font-semibold">
+                {tally?.weekReferred ?? 0}
+              </strong>{" "}
+              referred
+            </span>
+          </div>
+        </section>
+      )}
 
       {/* Pending Referral Alert */}
       {pendingReferral && (
@@ -418,7 +593,7 @@ export default function HomePage() {
             href="/encounters"
             className="text-xs sm:text-sm font-normal text-[#0073F3] hover:underline"
           >
-            View all
+            See all
           </Link>
         </div>
 
@@ -430,7 +605,9 @@ export default function HomePage() {
           <div className="flex flex-col gap-2.5">
             {encounters.map((e) => {
               const isClosed = e.status === "completed";
-              const dateVal = e.started_at ? new Date(e.started_at) : new Date();
+              const dateVal = e.started_at
+                ? new Date(e.started_at)
+                : new Date();
               const patientName =
                 e.patients &&
                 typeof e.patients === "object" &&

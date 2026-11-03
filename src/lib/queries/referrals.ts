@@ -30,6 +30,30 @@ export function usePendingReferralAlert(facilityId: string) {
   });
 }
 
+/**
+ * "Results from the clinic" (spec v0.3 Home screen) — confirmed diagnoses for
+ * patients this outlet referred, matched by referral code. A referral in
+ * `closed` status means the destination facility recorded an outcome.
+ */
+export function useClinicResultsAlert(facilityId: string) {
+  return useQuery({
+    queryKey: ["referrals", "clinic-results", facilityId],
+    enabled: Boolean(facilityId),
+    queryFn: async () => {
+      const supabase = createClient();
+      const { data, count, error } = await supabase
+        .from("referrals")
+        .select("id, referral_code, closed_at", { count: "exact" })
+        .eq("source_facility_id", facilityId)
+        .eq("status", "closed")
+        .order("closed_at", { ascending: false })
+        .limit(1);
+      if (error) throw error;
+      return { count: count ?? 0, latest: data?.[0] ?? null };
+    },
+  });
+}
+
 export function useReferrals(facilityId: string, search: string) {
   return useQuery({
     queryKey: ["referrals", "list", facilityId, search],

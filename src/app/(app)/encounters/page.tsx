@@ -6,12 +6,13 @@ import { format } from "date-fns";
 import { useSession } from "@/lib/session/session-context";
 import { useEncounters } from "@/lib/queries/encounters";
 import { MobileSubpageHeader } from "@/components/nav/mobile-subpage-header";
+import { EchoEncounterHistory } from "@/components/echo/encounter-history";
 
 export default function EncountersPage() {
   const { activeFacility, workflowMode } = useSession();
   const [search, setSearch] = useState("");
   const { data: rawEncounters = [], isLoading } = useEncounters(
-    activeFacility?.facilityId
+    activeFacility?.facilityId,
   );
   // Filter out voided encounters from the list
   const encounters = rawEncounters.filter((e) => e.status !== "voided");
@@ -22,7 +23,9 @@ export default function EncountersPage() {
     const term = search.toLowerCase().trim();
     return encounters.filter((e) => {
       const pName = (
-        e.patients && typeof e.patients === "object" && "full_name" in e.patients
+        e.patients &&
+        typeof e.patients === "object" &&
+        "full_name" in e.patients
           ? (e.patients as { full_name: string }).full_name
           : ""
       ).toLowerCase();
@@ -50,9 +53,32 @@ export default function EncountersPage() {
   }, [filteredEncounters]);
 
   const newEncounterHref =
-    workflowMode === "echo"
-      ? "/encounters/echo/new"
-      : "/encounters/reach/new";
+    workflowMode === "echo" ? "/encounters/echo/new" : "/encounters/reach/new";
+
+  // ECHO (spec v0.3 "Encounter history") grouped by day, no patient names —
+  // distinct from the REACH list below, which carries identified patients.
+  if (workflowMode === "echo") {
+    return (
+      <div className="flex flex-col gap-4 sm:gap-5 pt-2 sm:pt-6">
+        <MobileSubpageHeader title="Encounter history" backHref="/home" />
+
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="hidden sm:block text-xl sm:text-[28px] font-normal text-[#495766] tracking-[-0.3px]">
+            Encounter history
+          </h1>
+          <Link
+            href={newEncounterHref}
+            style={{ borderRadius: "12px", border: "none", boxShadow: "none" }}
+            className="bg-[#0073F3] hover:bg-[#0062d4] text-white font-medium text-xs sm:text-[15px] px-3.5 sm:px-5 py-2 sm:py-2.5 h-9.5 sm:h-13 rounded-[12px] flex items-center justify-center shrink-0 border-0 shadow-none transition-colors"
+          >
+            New patient
+          </Link>
+        </div>
+
+        <EchoEncounterHistory facilityId={activeFacility?.facilityId} />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4 sm:gap-5 pt-2 sm:pt-6">
@@ -86,11 +112,7 @@ export default function EncountersPage() {
       <div className="flex items-center gap-2.5 sm:gap-3">
         <div className="relative flex-1">
           <div className="absolute left-4 top-1/2 -translate-y-1/2 size-5 pointer-events-none">
-            <img
-              src="/icons/search.svg"
-              alt=""
-              className="size-full"
-            />
+            <img src="/icons/search.svg" alt="" className="size-full" />
           </div>
           <input
             type="text"
@@ -139,8 +161,8 @@ export default function EncountersPage() {
                     "full_name" in e.patients
                       ? (e.patients as { full_name: string }).full_name
                       : e.patient_id
-                      ? "Patient"
-                      : `Anonymous \u00b7 ${e.session_code || e.encounter_code}`;
+                        ? "Patient"
+                        : `Anonymous \u00b7 ${e.session_code || e.encounter_code}`;
                   const isClosed = e.status === "completed";
 
                   return (
@@ -166,7 +188,8 @@ export default function EncountersPage() {
                           {/* Details */}
                           <div className="min-w-0 flex flex-col gap-0.5">
                             <p className="text-[15px] sm:text-[16px] font-medium text-[#242b33] truncate">
-                              {e.encounter_code || `ENC-${e.id.slice(0, 6).toUpperCase()}`}
+                              {e.encounter_code ||
+                                `ENC-${e.id.slice(0, 6).toUpperCase()}`}
                             </p>
                             <p className="text-xs sm:text-sm text-[#6e8298] truncate">
                               <span className="text-[#bfbfbf]">For</span>{" "}

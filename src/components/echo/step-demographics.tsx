@@ -7,13 +7,11 @@ import { Check, Hash, RefreshCw } from "lucide-react";
 import { usePatients } from "@/lib/queries/patients";
 import { useSession } from "@/lib/session/session-context";
 import type { PrivacyMode } from "@/lib/supabase/database.types";
-import { ageExactToBand } from "@/components/echo/step-age";
 
 export interface DemographicsData {
   fullName?: string;
   phone?: string;
   existingPatientId?: string;
-  ageExact: number | null;
   ageBand: string;
   sex: "female" | "male" | "other_not_stated";
   pregnancyStatus: "not_pregnant" | "pregnant" | "not_sure" | null;
@@ -27,9 +25,12 @@ interface StepDemographicsProps {
   privacyMode?: PrivacyMode;
   sessionCode?: string;
   onGenerateNewCode?: () => void;
-  /** Pre-filled age & sex from StepAge */
-  initialAge?: number | null;
-  initialSex?: "female" | "male" | "other_not_stated";
+  /**
+   * Age band carried forward from Step 2 (Presence + Age, AIR-794). Sex is no
+   * longer captured there (spec v0.3 moves it to this consent/details screen),
+   * so it is asked here instead.
+   */
+  initialAgeBand?: string;
   onContinue: (data: DemographicsData) => void;
   onPrevious?: () => void;
 }
@@ -67,11 +68,16 @@ function TileGrid<T extends string>({
               "transition-all cursor-pointer border",
               sel
                 ? "border-[#0073f3] bg-[#f0f7ff] text-[#0073f3] shadow-sm ring-1 ring-[#0073f3]"
-                : "border-[#e4e8ec] bg-white text-[#242b33] hover:bg-[#fafafa]"
+                : "border-[#e4e8ec] bg-white text-[#242b33] hover:bg-[#fafafa]",
             )}
           >
             <div className="flex flex-col min-w-0">
-              <span className={cn("leading-snug truncate", sel ? "font-semibold" : "font-normal")}>
+              <span
+                className={cn(
+                  "leading-snug truncate",
+                  sel ? "font-semibold" : "font-normal",
+                )}
+              >
                 {opt.label}
               </span>
               {opt.sub && (
@@ -85,7 +91,7 @@ function TileGrid<T extends string>({
                 "size-5 rounded-full flex items-center justify-center shrink-0 transition-colors border",
                 sel
                   ? "bg-[#0073f3] border-[#0073f3] text-white"
-                  : "border-[#c7d2de] bg-white"
+                  : "border-[#c7d2de] bg-white",
               )}
             >
               {sel && <Check className="size-3 stroke-[3]" />}
@@ -128,13 +134,14 @@ export function StepDemographics({
   privacyMode = "identified",
   sessionCode,
   onGenerateNewCode,
-  initialAge,
-  initialSex,
+  initialAgeBand,
   onContinue,
   onPrevious,
 }: StepDemographicsProps) {
   const { activeFacility } = useSession();
-  const { data: existingPatients = [] } = usePatients(activeFacility?.facilityId);
+  const { data: existingPatients = [] } = usePatients(
+    activeFacility?.facilityId,
+  );
 
   // Identified fields
   const [patientChoice, setPatientChoice] = useState<"new" | "existing">("new");
@@ -142,13 +149,21 @@ export function StepDemographics({
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
 
-  // Demographic fields (age & sex come pre-filled from StepAge)
-  const [pregnancy, setPregnancy] = useState<DemographicsData["pregnancyStatus"] | "">("");
-  const [insurance, setInsurance] = useState<DemographicsData["insuranceStatus"] | "">("");
-  const [education, setEducation] = useState<DemographicsData["educationLevel"] | "">("");
-  const [occupation, setOccupation] = useState<DemographicsData["occupationType"] | "">("");
-
-  const sex = initialSex ?? "other_not_stated";
+  // Sex is asked here (spec v0.3 step 4 "who it is for" screen) now that age
+  // band arrives pre-filled from Step 2 (Presence + Age).
+  const [sex, setSex] = useState<DemographicsData["sex"] | "">("");
+  const [pregnancy, setPregnancy] = useState<
+    DemographicsData["pregnancyStatus"] | ""
+  >("");
+  const [insurance, setInsurance] = useState<
+    DemographicsData["insuranceStatus"] | ""
+  >("");
+  const [education, setEducation] = useState<
+    DemographicsData["educationLevel"] | ""
+  >("");
+  const [occupation, setOccupation] = useState<
+    DemographicsData["occupationType"] | ""
+  >("");
 
   const handleSelectExisting = (patientId: string) => {
     setSelectedPatientId(patientId);
@@ -156,7 +171,10 @@ export function StepDemographics({
     if (!p) return;
     setFullName(p.full_name);
     setPhone(p.phone_e164 ? p.phone_e164.replace(/^\+234/, "0") : "");
-    if (p.pregnancy_status === "pregnant" || p.pregnancy_status === "not_pregnant") {
+    if (
+      p.pregnancy_status === "pregnant" ||
+      p.pregnancy_status === "not_pregnant"
+    ) {
       setPregnancy(p.pregnancy_status);
     }
   };
@@ -171,20 +189,22 @@ export function StepDemographics({
       }
     }
 
-    if (!pregnancy && sex === "female") return toast.error("Please select pregnancy status");
+    if (!sex) return toast.error("Please select sex");
+    if (!pregnancy && sex === "female")
+      return toast.error("Please select pregnancy status");
     if (!insurance) return toast.error("Please select health insurance status");
     if (!education) return toast.error("Please select education level");
     if (!occupation) return toast.error("Please select occupation");
 
-    const band = ageExactToBand(initialAge ?? null);
-
     onContinue({
       fullName: privacyMode === "identified" ? fullName.trim() : undefined,
-      phone: privacyMode === "identified" && phone.trim() ? phone.trim() : undefined,
+      phone:
+        privacyMode === "identified" && phone.trim() ? phone.trim() : undefined,
       existingPatientId:
-        privacyMode === "identified" && patientChoice === "existing" ? selectedPatientId : undefined,
-      ageExact: initialAge ?? null,
-      ageBand: band,
+        privacyMode === "identified" && patientChoice === "existing"
+          ? selectedPatientId
+          : undefined,
+      ageBand: initialAgeBand || "18_to_49",
       sex,
       pregnancyStatus: pregnancy || (sex === "female" ? null : "not_pregnant"),
       insuranceStatus: insurance as DemographicsData["insuranceStatus"],
@@ -206,7 +226,8 @@ export function StepDemographics({
               Step 3 of 6
             </span>
             <h2 className="text-xl sm:text-2xl font-normal text-[#001f3e] leading-snug">
-              <span className="font-medium">Patient Details</span> &amp; background
+              <span className="font-medium">Patient Details</span> &amp;
+              background
             </h2>
             <p className="text-sm sm:text-base text-[#6e8298]">
               Bayanan maralafiya da aka tattara don bin diddigin kula da lafiya.
@@ -258,7 +279,7 @@ export function StepDemographics({
                       "px-3.5 py-1.5 text-xs sm:text-sm font-medium rounded-[8px] transition-all cursor-pointer",
                       patientChoice === "new"
                         ? "bg-white text-[#242b33] shadow-sm"
-                        : "text-[#6e8298] hover:text-[#242b33]"
+                        : "text-[#6e8298] hover:text-[#242b33]",
                     )}
                   >
                     New Patient
@@ -270,7 +291,7 @@ export function StepDemographics({
                       "px-3.5 py-1.5 text-xs sm:text-sm font-medium rounded-[8px] transition-all cursor-pointer",
                       patientChoice === "existing"
                         ? "bg-white text-[#242b33] shadow-sm"
-                        : "text-[#6e8298] hover:text-[#242b33]"
+                        : "text-[#6e8298] hover:text-[#242b33]",
                     )}
                   >
                     Existing Patient
@@ -329,6 +350,24 @@ export function StepDemographics({
             </SectionCard>
           )}
 
+          {/* Sex — asked here now that Step 2 only captures presence + age band */}
+          <SectionCard title="Sex" subtitle="Jinsi" required>
+            <TileGrid
+              cols={3}
+              value={sex}
+              onChange={(v) => setSex(v as DemographicsData["sex"])}
+              options={[
+                { value: "female", label: "Female", sub: "Mace" },
+                { value: "male", label: "Male", sub: "Namiji" },
+                {
+                  value: "other_not_stated",
+                  label: "Other / Not stated",
+                  sub: "Sauran",
+                },
+              ]}
+            />
+          </SectionCard>
+
           {/* Pregnancy Status (if applicable) */}
           {sex === "female" && (
             <SectionCard
@@ -339,11 +378,21 @@ export function StepDemographics({
               <TileGrid
                 cols={1}
                 value={(pregnancy ?? "") as string}
-                onChange={(v) => setPregnancy(v as DemographicsData["pregnancyStatus"])}
+                onChange={(v) =>
+                  setPregnancy(v as DemographicsData["pregnancyStatus"])
+                }
                 options={[
-                  { value: "not_pregnant", label: "Not pregnant / not applicable", sub: "Ba ciki / ba ya shafi wannan ba" },
+                  {
+                    value: "not_pregnant",
+                    label: "Not pregnant / not applicable",
+                    sub: "Ba ciki / ba ya shafi wannan ba",
+                  },
                   { value: "pregnant", label: "Pregnant", sub: "Tana da ciki" },
-                  { value: "not_sure", label: "Not sure / prefer not to say", sub: "Ba a sani ba / ba a bayyana ba" },
+                  {
+                    value: "not_sure",
+                    label: "Not sure / prefer not to say",
+                    sub: "Ba a sani ba / ba a bayyana ba",
+                  },
                 ]}
               />
             </SectionCard>
@@ -360,8 +409,16 @@ export function StepDemographics({
               value={insurance}
               onChange={setInsurance}
               options={[
-                { value: "no_insurance", label: "No insurance", sub: "Babu inshora" },
-                { value: "nhia_or_other", label: "NHIA / Other cover", sub: "Yana da inshora" },
+                {
+                  value: "no_insurance",
+                  label: "No insurance",
+                  sub: "Babu inshora",
+                },
+                {
+                  value: "nhia_or_other",
+                  label: "NHIA / Other cover",
+                  sub: "Yana da inshora",
+                },
               ]}
             />
           </SectionCard>
@@ -377,25 +434,33 @@ export function StepDemographics({
               value={education}
               onChange={setEducation}
               options={[
-                { value: "none_primary", label: "None / Primary", sub: "Babu / Firamare" },
+                {
+                  value: "none_primary",
+                  label: "None / Primary",
+                  sub: "Babu / Firamare",
+                },
                 { value: "secondary", label: "Secondary", sub: "Sakandare" },
-                { value: "tertiary", label: "Tertiary", sub: "Gaba da sakandare" },
+                {
+                  value: "tertiary",
+                  label: "Tertiary",
+                  sub: "Gaba da sakandare",
+                },
               ]}
             />
           </SectionCard>
 
           {/* Occupation */}
-          <SectionCard
-            title="Occupation"
-            subtitle="Sana'a"
-            required
-          >
+          <SectionCard title="Occupation" subtitle="Sana'a" required>
             <TileGrid
               cols={2}
               value={occupation}
               onChange={setOccupation}
               options={[
-                { value: "trader", label: "Trader", sub: "Dan kasuwa / Mai sayarwa" },
+                {
+                  value: "trader",
+                  label: "Trader",
+                  sub: "Dan kasuwa / Mai sayarwa",
+                },
                 { value: "farmer", label: "Farmer", sub: "Manomi" },
                 { value: "student", label: "Student", sub: "Dalibi" },
                 { value: "other", label: "Other", sub: "Sauran sana'o'i" },
