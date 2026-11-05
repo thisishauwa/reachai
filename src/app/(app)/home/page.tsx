@@ -19,7 +19,9 @@ import { useRecentPatients } from "@/lib/queries/patients";
 import {
   useRecentEncounters,
   useEncounterTally,
+  useRecentEchoEncounters,
 } from "@/lib/queries/encounters";
+import { EchoEncounterRow } from "@/components/echo/encounter-history";
 import {
   usePendingReferralAlert,
   useClinicResultsAlert,
@@ -83,6 +85,7 @@ export default function HomePage() {
 
   const { data: patients = [] } = useRecentPatients(facilityId, 5);
   const { data: encounters = [] } = useRecentEncounters(facilityId, 5);
+  const { data: echoEncounters = [] } = useRecentEchoEncounters(facilityId, 3);
   const { data: pendingReferral } = usePendingReferralAlert(facilityId);
   const { data: tally } = useEncounterTally(facilityId);
   const { data: clinicResults } = useClinicResultsAlert(facilityId ?? "");
@@ -597,7 +600,25 @@ export default function HomePage() {
           </Link>
         </div>
 
-        {encounters.length === 0 ? (
+        {workflowMode === "echo" ? (
+          // Anonymised rows — "Female, 18 to 49 / Cholera pattern · BK-TRN /
+          // 14:20 / Referred" (spec v0.3 / walkthrough v0.4 screen 1). No
+          // patient names on the ECHO Home screen, matching encounter history.
+          echoEncounters.length === 0 ? (
+            <div className="bg-[#fafafa] rounded-[20px] sm:rounded-[24px] p-6 text-center text-sm text-[#6e8298]">
+              No encounters documented yet
+            </div>
+          ) : (
+            <div className="bg-[#fafafa] rounded-[20px] sm:rounded-[28px] p-4 sm:p-5 flex flex-col gap-4">
+              {echoEncounters.map((e, idx) => (
+                <div key={e.id} className="flex flex-col gap-4">
+                  {idx > 0 && <div className="h-px bg-[#f0f0f0] w-full" />}
+                  <EchoEncounterRow e={e} />
+                </div>
+              ))}
+            </div>
+          )
+        ) : encounters.length === 0 ? (
           <div className="bg-[#fafafa] rounded-[20px] sm:rounded-[24px] p-6 text-center text-sm text-[#6e8298]">
             No encounters documented yet
           </div>

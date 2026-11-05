@@ -14,13 +14,13 @@ type HistoryFilter = "all" | "referred" | "results_in";
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
-function sexLabel(sex: string | null | undefined): string {
+export function sexLabel(sex: string | null | undefined): string {
   if (sex === "female") return "Female";
   if (sex === "male") return "Male";
   return "Patient";
 }
 
-function rowStatus(e: EchoHistoryEncounter): {
+export function rowStatus(e: EchoHistoryEncounter): {
   label: string;
   tone: "referred" | "results_in" | "routine" | "pending";
 } {
@@ -43,12 +43,55 @@ function rowStatus(e: EchoHistoryEncounter): {
   };
 }
 
-const STATUS_STYLES: Record<string, string> = {
+export const STATUS_STYLES: Record<string, string> = {
   referred: "bg-[#fff1ed] text-[#d4583b]",
   results_in: "bg-[#dcfce7] text-[#166534]",
   routine: "bg-[#f1f5f9] text-[#475569]",
   pending: "bg-[#fff8dc] text-[#92400e]",
 };
+
+/**
+ * One anonymised encounter row — "Female, 18 to 49 / Cholera pattern · BK-TRN /
+ * 14:20 / Referred" (walkthrough v0.4 screen 1 "Recent encounters" + screen 2
+ * history list share this exact row shape).
+ */
+export function EchoEncounterRow({ e }: { e: EchoHistoryEncounter }) {
+  const demo = e.encounter_demographics?.[0];
+  const condition = e.triage_outcomes?.[0]?.condition_label_en;
+  const referralCode = e.referrals?.[0]?.referral_code;
+  const status = rowStatus(e);
+  const timeLabel = format(new Date(e.started_at), "HH:mm");
+
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="min-w-0 flex flex-col gap-0.5">
+        <p className="text-[14px] sm:text-[15px] font-medium text-[#242b33] truncate">
+          {sexLabel(demo?.sex)}, {formatAgeBandLabel(demo?.age_band)}
+        </p>
+        <p className="text-xs sm:text-sm text-[#6e8298] truncate">
+          {condition ?? "No pattern matched"}
+          {referralCode ? ` · ${referralCode}` : ""} · {timeLabel}
+        </p>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <span
+          className={cn(
+            "text-[11px] font-medium px-2.5 py-1 rounded-full",
+            STATUS_STYLES[status.tone],
+          )}
+        >
+          {status.label}
+        </span>
+        <Link
+          href={`/encounters/${e.id}`}
+          className="bg-white border border-[#0073f3] hover:bg-[#0073f3]/5 px-3 py-1.5 text-xs font-medium text-[#0073f3] rounded-[10px] transition-colors"
+        >
+          View
+        </Link>
+      </div>
+    </div>
+  );
+}
 
 export function EchoEncounterHistory({
   facilityId,
@@ -164,49 +207,14 @@ export function EchoEncounterHistory({
                   </div>
                 ) : (
                   <div className="bg-[#fafafa] rounded-[20px] sm:rounded-[28px] p-4 sm:p-5 flex flex-col gap-4">
-                    {items.map((e, idx) => {
-                      const demo = e.encounter_demographics?.[0];
-                      const condition =
-                        e.triage_outcomes?.[0]?.condition_label_en;
-                      const status = rowStatus(e);
-                      const timeLabel = format(new Date(e.started_at), "HH:mm");
-
-                      return (
-                        <div key={e.id} className="flex flex-col gap-4">
-                          {idx > 0 && (
-                            <div className="h-px bg-[#f0f0f0] w-full" />
-                          )}
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="min-w-0 flex flex-col gap-0.5">
-                              <p className="text-[14px] sm:text-[15px] font-medium text-[#242b33] truncate">
-                                {sexLabel(demo?.sex)},{" "}
-                                {formatAgeBandLabel(demo?.age_band)}
-                              </p>
-                              <p className="text-xs sm:text-sm text-[#6e8298] truncate">
-                                {condition ?? "No pattern matched"} ·{" "}
-                                {timeLabel}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              <span
-                                className={cn(
-                                  "text-[11px] font-medium px-2.5 py-1 rounded-full",
-                                  STATUS_STYLES[status.tone],
-                                )}
-                              >
-                                {status.label}
-                              </span>
-                              <Link
-                                href={`/encounters/${e.id}`}
-                                className="bg-white border border-[#0073f3] hover:bg-[#0073f3]/5 px-3 py-1.5 text-xs font-medium text-[#0073f3] rounded-[10px] transition-colors"
-                              >
-                                View
-                              </Link>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
+                    {items.map((e, idx) => (
+                      <div key={e.id} className="flex flex-col gap-4">
+                        {idx > 0 && (
+                          <div className="h-px bg-[#f0f0f0] w-full" />
+                        )}
+                        <EchoEncounterRow e={e} />
+                      </div>
+                    ))}
                   </div>
                 )}
               </section>

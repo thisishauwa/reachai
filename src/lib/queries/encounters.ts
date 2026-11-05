@@ -215,7 +215,7 @@ export interface EchoHistoryEncounter {
   status: string;
   encounter_demographics: { sex: string | null; age_band: string | null }[];
   triage_outcomes: { severity: string; condition_label_en: string | null }[];
-  referrals: { status: string }[];
+  referrals: { status: string; referral_code: string }[];
 }
 
 /**
@@ -232,7 +232,7 @@ export function useEchoEncounterHistory(facilityId: string | undefined) {
       const { data, error } = await supabase
         .from("encounters")
         .select(
-          "id, encounter_code, session_code, started_at, status, encounter_demographics(sex, age_band), triage_outcomes(severity, condition_label_en), referrals(status)",
+          "id, encounter_code, session_code, started_at, status, encounter_demographics(sex, age_band), triage_outcomes(severity, condition_label_en), referrals(status, referral_code)",
         )
         .eq("facility_id", facilityId!)
         .eq("workflow_mode", "echo")
@@ -243,4 +243,20 @@ export function useEchoEncounterHistory(facilityId: string | undefined) {
       return (data ?? []) as unknown as EchoHistoryEncounter[];
     },
   });
+}
+
+/**
+ * Recent encounters for the ECHO Home screen "Recent encounters" card
+ * (walkthrough v0.4 screen 1) — same anonymised shape as the full history,
+ * just capped to a short list.
+ */
+export function useRecentEchoEncounters(
+  facilityId: string | undefined,
+  limit = 3,
+) {
+  const query = useEchoEncounterHistory(facilityId);
+  return {
+    ...query,
+    data: (query.data ?? []).slice(0, limit),
+  };
 }
