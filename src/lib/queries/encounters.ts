@@ -218,6 +218,13 @@ export interface EchoHistoryEncounter {
   referrals: { status: string; referral_code: string }[];
 }
 
+/** Normalises a PostgREST embed that may come back as an array, a single
+ * object (one-to-one relations, e.g. a `unique`/primary-key FK), or null. */
+function toArray<T>(value: T | T[] | null | undefined): T[] {
+  if (value == null) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
 /**
  * Encounter history for the ECHO workflow (spec v0.3 / walkthrough v0.4 screen 2).
  * Grouped by day, never carries a patient name — only sex + age band, matching
@@ -240,7 +247,16 @@ export function useEchoEncounterHistory(facilityId: string | undefined) {
         .order("started_at", { ascending: false })
         .limit(200);
       if (error) throw error;
-      return (data ?? []) as unknown as EchoHistoryEncounter[];
+      // `encounter_demographics` (PK = encounter_id) and `referrals` (unique
+      // encounter_id) are one-to-one relations: PostgREST embeds them as a
+      // single object or null, not an array, unlike `triage_outcomes`. Force
+      // array shape here so every consumer can rely on it.
+      return (data ?? []).map((row) => ({
+        ...row,
+        encounter_demographics: toArray(row.encounter_demographics as unknown),
+        triage_outcomes: toArray(row.triage_outcomes as unknown),
+        referrals: toArray(row.referrals as unknown),
+      })) as unknown as EchoHistoryEncounter[];
     },
   });
 }
