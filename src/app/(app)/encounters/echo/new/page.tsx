@@ -21,20 +21,17 @@ import {
   type PresenceAgeData,
 } from "@/components/echo/step-presence-age";
 import {
-  StepConsent,
-  type StepConsentResult,
-} from "@/components/echo/step-consent";
-import {
-  StepDemographics,
-  type DemographicsData,
-} from "@/components/echo/step-demographics";
+  StepDetailsConsent,
+  type DetailsConsentResult,
+  type PatientRelationship,
+} from "@/components/echo/step-details-consent";
 import {
   StepLookCheck,
   type LookCheckResult,
 } from "@/components/echo/step-look-check";
 import { StepEmergency } from "@/components/echo/step-emergency";
-import { StepGeneralSymptoms } from "@/components/echo/step-general-symptoms";
-import { StepQuestions } from "@/components/echo/step-questions";
+import { StepComplaintArea } from "@/components/echo/step-complaint-area";
+import { StepComplaintQuestions } from "@/components/echo/step-complaint-questions";
 import { StepTriage } from "@/components/echo/step-triage";
 import { StepReferral } from "@/components/echo/step-referral";
 import { EncounterCompletedModal } from "@/components/echo/encounter-completed-modal";
@@ -44,11 +41,15 @@ import type {
   TriageSeverity,
 } from "@/lib/supabase/database.types";
 import type { PatientPresence } from "@/lib/reference/request-options";
+import type {
+  ComplaintAnswer,
+  ComplaintAreaCode,
+} from "@/lib/reference/complaint-questions";
 
 // Flow order per spec v0.3 / walkthrough v0.4 (AIR-794):
-// request → presence + age → look-check → consent → demographics
+// request → presence + age → look-check → details + consent
 //   ├── (if danger signs) → refer-now + classifying questions → triage → referral → complete
-//   └── (if no danger signs) → general_symptoms → triage → complete
+//   └── (if no danger signs) → complaint area → A-F question set → triage/result
 //
 // Request logging and presence/age are surveillance-only and never route
 // anything — the look-check decision (syndrome step) is unaffected by them.
@@ -61,9 +62,8 @@ type EchoStep =
   | "syndrome"
   | "emergency"
   | "consent"
-  | "demographics"
-  | "general_symptoms"
-  | "questions"
+  | "complaint"
+  | "complaint_questions"
   | "triage"
   | "referral"
   | "complete";
@@ -94,6 +94,9 @@ interface EchoEncounterState {
   caregiverReported: boolean;
   /** At least one caregiver look-check answer was Don't know. */
   lookCheckUncertain: boolean;
+  patientRelationship: PatientRelationship | null;
+  complaintArea: ComplaintAreaCode | null;
+  complaintAnswers: Record<string, ComplaintAnswer>;
   /** Selected general / normal symptom codes */
   generalSymptomCodes: string[];
   /** Combined symptom codes */
@@ -128,6 +131,9 @@ const INITIAL_STATE: EchoEncounterState = {
   primaryDangerSignCode: null,
   caregiverReported: false,
   lookCheckUncertain: false,
+  patientRelationship: null,
+  complaintArea: null,
+  complaintAnswers: {},
   generalSymptomCodes: [],
   symptomCodes: [],
   syndromeIds: [],
@@ -148,7 +154,7 @@ export default function NewEchoEncounterPage() {
   const { setHasEncounterToday } = useZeroReport();
   const [state, setState] = useState<EchoEncounterState>(INITIAL_STATE);
   const [encounterCode] = useState(() => generateEncounterCode());
-  const [sessionCode, setSessionCode] = useState(() => generateSessionCode());
+  const [sessionCode] = useState(() => generateSessionCode());
   const [, setCompleting] = useState(false);
 
   const { data: anonConsentText } = useActiveConsentText("anonymous_screening");
@@ -244,7 +250,7 @@ export default function NewEchoEncounterPage() {
         questionSetId: result.hasUnknown ? "look_check_caregiver_unknown" : null,
         answers: result.hasUnknown
           ? { LOOK_CHECK_UNKNOWN: "yes", CAREGIVER_REPORTED: true }
-          : {},
+          : { CAREGIVER_REPORTED: result.caregiverReported },
         step: "consent",
       }));
     } else {
@@ -263,18 +269,31 @@ export default function NewEchoEncounterPage() {
     }
   }
 
-  // ── Step 4a: Consent accepted ───────────────────────────────────────────
-  function handleConsentComplete(data: StepConsentResult) {
-    setState((s) => ({
-      ...s,
-      privacyMode: data.privacyMode,
-      locale: data.locale,
-      step: "demographics",
-    }));
-  }
+  // ── Step 4: Details + consent complete ──────────────────────────────────
+  async function handleDemographicsComplete(data: DetailsConsentResult) {
+    const nextStep: EchoStep =
+      state.dangerSignCodes.length > 0 || state.lookCheckUncertain
+        ? "triage"
+        : "complaint";
 
-  // ── Step 4b: Demographics complete ──────────────────────────────────────
-  async function handleDemographicsComplete(data: DemographicsData) {
+    // Returning from a later screen must update the in-memory details without
+    // creating a second encounter for the same walkthrough.
+    if (state.encounterId) {
+      setState((s) => ({
+        ...s,
+        patientRelationship: data.relationship,
+        sex: data.sex,
+        locale: data.locale,
+        answers: {
+          ...s.answers,
+          PATIENT_RELATIONSHIP: data.relationship,
+          CONSENTED_BY: data.consentedBy,
+        },
+        step: nextStep,
+      }));
+      return;
+    }
+
     const encounterId = crypto.randomUUID();
     const consentId = crypto.randomUUID();
     let patientId: string | null = null;
@@ -432,16 +451,19 @@ export default function NewEchoEncounterPage() {
     // Danger signs were already collected at the look-check step (before
     // consent). Route straight into the matching follow-up step rather than
     // back through the look-check.
-    const nextStep: EchoStep =
-      state.dangerSignCodes.length > 0 || state.lookCheckUncertain
-        ? "triage"
-        : "general_symptoms";
-
     setState((s) => ({
       ...s,
       encounterId,
       patientId,
       patientName,
+      patientRelationship: data.relationship,
+      sex: data.sex,
+      locale: data.locale,
+      answers: {
+        ...s.answers,
+        PATIENT_RELATIONSHIP: data.relationship,
+        CONSENTED_BY: data.consentedBy,
+      },
       sessionCode: state.privacyMode === "anonymous" ? sessionCode : null,
       consentId,
       step: nextStep,
@@ -540,18 +562,18 @@ export default function NewEchoEncounterPage() {
               ...s,
               step: s.primaryDangerSignCode ? "emergency" : "syndrome",
             }));
-          } else if (state.step === "demographics") {
+          } else if (state.step === "complaint") {
             setState((s) => ({ ...s, step: "consent" }));
-          } else if (state.step === "general_symptoms") {
-            setState((s) => ({ ...s, step: "demographics" }));
-          } else if (state.step === "questions") {
-            setState((s) => ({ ...s, step: "demographics" }));
+          } else if (state.step === "complaint_questions") {
+            setState((s) => ({ ...s, step: "complaint" }));
           } else if (state.step === "triage") {
-            if (state.dangerSignCodes.length > 0) {
-              setState((s) => ({ ...s, step: "questions" }));
-            } else {
-              setState((s) => ({ ...s, step: "general_symptoms" }));
-            }
+            setState((s) => ({
+              ...s,
+              step:
+                s.dangerSignCodes.length > 0 || s.lookCheckUncertain
+                  ? "consent"
+                  : "complaint_questions",
+            }));
           } else if (state.step === "referral") {
             setState((s) => ({ ...s, step: "triage" }));
           } else {
@@ -606,12 +628,14 @@ export default function NewEchoEncounterPage() {
         />
       )}
 
-      {/* Step 4a: Consent */}
+      {/* Step 4: Details + consent */}
       {state.step === "consent" && (
-        <StepConsent
-          initialMode={state.privacyMode}
+        <StepDetailsConsent
+          presence={state.presence ?? "with_me"}
+          ageBand={state.ageBand}
           isMinor={state.isMinor}
-          onContinue={handleConsentComplete}
+          caregiverReported={state.caregiverReported}
+          onContinue={(data) => void handleDemographicsComplete(data)}
           onPrevious={() =>
             setState((s) => ({
               ...s,
@@ -621,72 +645,44 @@ export default function NewEchoEncounterPage() {
         />
       )}
 
-      {/* Step 4b: Patient Details / Demographics */}
-      {state.step === "demographics" && (
-        <StepDemographics
-          privacyMode={state.privacyMode}
-          sessionCode={sessionCode}
-          onGenerateNewCode={() => setSessionCode(generateSessionCode())}
-          initialAgeBand={state.ageBand}
-          onContinue={handleDemographicsComplete}
+      {/* Step 4: one complaint area replaces legacy symptom tiles. */}
+      {state.step === "complaint" && (
+        <StepComplaintArea
+          initialArea={state.complaintArea}
           onPrevious={() => setState((s) => ({ ...s, step: "consent" }))}
-        />
-      )}
-
-      {/* Step 4c: Normal Symptoms Screen (when no danger signs) */}
-      {state.step === "general_symptoms" && state.encounterId && (
-        <StepGeneralSymptoms
-          initialSelected={state.generalSymptomCodes}
-          onPrevious={() => setState((s) => ({ ...s, step: "demographics" }))}
-          onContinue={(codes, labels) => {
+          onContinue={(area) =>
             setState((s) => ({
               ...s,
-              generalSymptomCodes: codes,
-              symptomCodes: codes,
-              syndromeIds: [],
-              syndromeLabels: labels,
-              step: "triage",
-            }));
-          }}
+              complaintAnswers:
+                s.complaintArea && s.complaintArea !== area
+                  ? {}
+                  : s.complaintAnswers,
+              complaintArea: area,
+              step: "complaint_questions",
+            }))
+          }
         />
       )}
 
-      {/* Step 5: Disease-Specific Questions (only for selected danger signs) */}
-      {state.step === "questions" &&
-        state.encounterId &&
-        (state.syndromeIds.length > 0 ? (
-          <StepQuestions
-            syndromeIds={state.syndromeIds}
-            syndromeLabels={state.syndromeLabels}
-            encounterId={state.encounterId}
-            encounterCode={encounterCode}
-            patientName={state.patientName ?? undefined}
-            isAnonymous={state.privacyMode === "anonymous"}
-            sessionCode={state.sessionCode ?? undefined}
-            onPrevious={() => setState((s) => ({ ...s, step: "demographics" }))}
-            onComplete={(questionSetId, answers) =>
-              setState((s) => ({
-                ...s,
-                questionSetId,
-                answers,
-                step: "triage",
-              }))
-            }
-          />
-        ) : (
-          <div className="bg-[#f9f9f9] rounded-[20px] p-8 flex flex-col items-center text-center gap-4">
-            <p className="text-base font-medium text-[#242b33]">
-              No disease-specific follow-up questions required.
-            </p>
-            <button
-              type="button"
-              onClick={() => setState((s) => ({ ...s, step: "triage" }))}
-              className="px-6 py-3 rounded-[12px] bg-[#0073f3] text-white font-medium text-sm hover:bg-[#0060cb] transition-colors"
-            >
-              Continue to assessment
-            </button>
-          </div>
-        ))}
+      {/* Step 5: only the selected A-F set, with A7/A8 bridges. */}
+      {state.step === "complaint_questions" && state.encounterId && state.complaintArea && (
+        <StepComplaintQuestions
+          area={state.complaintArea}
+          encounterId={state.encounterId}
+          initialAnswers={state.complaintAnswers}
+          onPrevious={() => setState((s) => ({ ...s, step: "complaint" }))}
+          onComplete={(questionSetId, complaintAnswers) =>
+            setState((s) => ({
+              ...s,
+              questionSetId,
+              complaintAnswers,
+              answers: { ...s.answers, ...complaintAnswers, COMPLAINT_AREA: s.complaintArea },
+              generalSymptomCodes: s.complaintArea ? [`COMPLAINT_${s.complaintArea}`] : [],
+              step: "triage",
+            }))
+          }
+        />
+      )}
 
       {/* Step 6: Severity / Triage Assessment */}
       {state.step === "triage" && state.encounterId && (
