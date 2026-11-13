@@ -28,7 +28,11 @@ import {
   StepDemographics,
   type DemographicsData,
 } from "@/components/echo/step-demographics";
-import { StepSyndrome } from "@/components/echo/step-syndrome";
+import {
+  StepLookCheck,
+  type LookCheckResult,
+} from "@/components/echo/step-look-check";
+import { StepEmergency } from "@/components/echo/step-emergency";
 import { StepGeneralSymptoms } from "@/components/echo/step-general-symptoms";
 import { StepQuestions } from "@/components/echo/step-questions";
 import { StepTriage } from "@/components/echo/step-triage";
@@ -42,8 +46,8 @@ import type {
 import type { PatientPresence } from "@/lib/reference/request-options";
 
 // Flow order per spec v0.3 / walkthrough v0.4 (AIR-794):
-// request → presence + age → syndrome (look-check) → consent → demographics
-//   ├── (if danger signs) → questions → triage → referral → complete
+// request → presence + age → look-check → consent → demographics
+//   ├── (if danger signs) → refer-now + classifying questions → triage → referral → complete
 //   └── (if no danger signs) → general_symptoms → triage → complete
 //
 // Request logging and presence/age are surveillance-only and never route
@@ -55,6 +59,7 @@ type EchoStep =
   | "request"
   | "presence_age"
   | "syndrome"
+  | "emergency"
   | "consent"
   | "demographics"
   | "general_symptoms"
@@ -83,6 +88,12 @@ interface EchoEncounterState {
   isMinor: boolean;
   /** Selected danger sign codes */
   dangerSignCodes: string[];
+  /** Highest-priority Step 3 danger sign (AIR-827 replacement). */
+  primaryDangerSignCode: string | null;
+  /** True when the patient was absent and answers came from a caregiver. */
+  caregiverReported: boolean;
+  /** At least one caregiver look-check answer was Don't know. */
+  lookCheckUncertain: boolean;
   /** Selected general / normal symptom codes */
   generalSymptomCodes: string[];
   /** Combined symptom codes */
@@ -114,6 +125,9 @@ const INITIAL_STATE: EchoEncounterState = {
   sex: "other_not_stated",
   isMinor: false,
   dangerSignCodes: [],
+  primaryDangerSignCode: null,
+  caregiverReported: false,
+  lookCheckUncertain: false,
   generalSymptomCodes: [],
   symptomCodes: [],
   syndromeIds: [],
@@ -135,7 +149,7 @@ export default function NewEchoEncounterPage() {
   const [state, setState] = useState<EchoEncounterState>(INITIAL_STATE);
   const [encounterCode] = useState(() => generateEncounterCode());
   const [sessionCode, setSessionCode] = useState(() => generateSessionCode());
-  const [completing, setCompleting] = useState(false);
+  const [, setCompleting] = useState(false);
 
   const { data: anonConsentText } = useActiveConsentText("anonymous_screening");
   const { data: identifiedConsentText } = useActiveConsentText(
@@ -213,29 +227,38 @@ export default function NewEchoEncounterPage() {
     }));
   }
 
-  // ── Step 3 (look-check stand-in): danger signs complete ────────────────
-  function handleSyndromeSelect(
-    symptomCodes: string[],
-    syndromeIds: string[],
-    labels: string[],
-    hasDangerSigns?: boolean,
-  ) {
-    if (!hasDangerSigns || syndromeIds.length === 0) {
+  // ── Step 3: visible look-check / caregiver questions ───────────────────
+  function handleLookCheckComplete(result: LookCheckResult) {
+    if (!result.primarySignCode) {
+      // A caregiver "Don't know" answer cannot end routine. Use the existing
+      // OTHER_PRIORITY triage path after details are captured so the record is
+      // marked urgent without inventing a diagnosis.
       setState((s) => ({
         ...s,
         dangerSignCodes: [],
-        syndromeIds: [],
-        syndromeLabels: [],
+        primaryDangerSignCode: null,
+        caregiverReported: result.caregiverReported,
+        lookCheckUncertain: result.hasUnknown,
+        syndromeIds: result.hasUnknown ? ["OTHER_PRIORITY"] : [],
+        syndromeLabels: result.hasUnknown ? ["Caregiver report needs patient review"] : [],
+        questionSetId: result.hasUnknown ? "look_check_caregiver_unknown" : null,
+        answers: result.hasUnknown
+          ? { LOOK_CHECK_UNKNOWN: "yes", CAREGIVER_REPORTED: true }
+          : {},
         step: "consent",
       }));
     } else {
       setState((s) => ({
         ...s,
-        dangerSignCodes: symptomCodes,
-        symptomCodes,
-        syndromeIds,
-        syndromeLabels: labels,
-        step: "consent",
+        dangerSignCodes: result.selectedSignCodes,
+        primaryDangerSignCode: result.primarySignCode,
+        caregiverReported: result.caregiverReported,
+        lookCheckUncertain: result.hasUnknown,
+        symptomCodes: result.selectedSignCodes,
+        syndromeIds: result.syndromeId ? [result.syndromeId] : [],
+        syndromeLabels: result.syndromeLabel ? [result.syndromeLabel] : [],
+        answers: { ...result.answers, CAREGIVER_REPORTED: result.caregiverReported },
+        step: "emergency",
       }));
     }
   }
@@ -410,7 +433,9 @@ export default function NewEchoEncounterPage() {
     // consent). Route straight into the matching follow-up step rather than
     // back through the look-check.
     const nextStep: EchoStep =
-      state.syndromeIds.length > 0 ? "questions" : "general_symptoms";
+      state.dangerSignCodes.length > 0 || state.lookCheckUncertain
+        ? "triage"
+        : "general_symptoms";
 
     setState((s) => ({
       ...s,
@@ -508,8 +533,13 @@ export default function NewEchoEncounterPage() {
             setState((s) => ({ ...s, step: "request" }));
           } else if (state.step === "syndrome") {
             setState((s) => ({ ...s, step: "presence_age" }));
-          } else if (state.step === "consent") {
+          } else if (state.step === "emergency") {
             setState((s) => ({ ...s, step: "syndrome" }));
+          } else if (state.step === "consent") {
+            setState((s) => ({
+              ...s,
+              step: s.primaryDangerSignCode ? "emergency" : "syndrome",
+            }));
           } else if (state.step === "demographics") {
             setState((s) => ({ ...s, step: "consent" }));
           } else if (state.step === "general_symptoms") {
@@ -551,10 +581,28 @@ export default function NewEchoEncounterPage() {
 
       {/* Step 3: Look-check (IDSR danger signs) */}
       {state.step === "syndrome" && (
-        <StepSyndrome
-          sessionCode={state.sessionCode ?? undefined}
+        <StepLookCheck
+          presence={state.presence ?? "with_me"}
+          ageBand={state.ageBand}
           onPrevious={() => setState((s) => ({ ...s, step: "presence_age" }))}
-          onSelect={handleSyndromeSelect}
+          onContinue={handleLookCheckComplete}
+        />
+      )}
+
+      {/* Immediate refer-now guidance precedes consent and classifies while transport is arranged. */}
+      {state.step === "emergency" && state.primaryDangerSignCode && (
+        <StepEmergency
+          primarySignCode={state.primaryDangerSignCode}
+          caregiverReported={state.caregiverReported}
+          onPrevious={() => setState((s) => ({ ...s, step: "syndrome" }))}
+          onComplete={(questionSetId, emergencyAnswers) =>
+            setState((s) => ({
+              ...s,
+              questionSetId,
+              answers: { ...s.answers, ...emergencyAnswers },
+              step: "consent",
+            }))
+          }
         />
       )}
 
@@ -564,7 +612,12 @@ export default function NewEchoEncounterPage() {
           initialMode={state.privacyMode}
           isMinor={state.isMinor}
           onContinue={handleConsentComplete}
-          onPrevious={() => setState((s) => ({ ...s, step: "syndrome" }))}
+          onPrevious={() =>
+            setState((s) => ({
+              ...s,
+              step: s.primaryDangerSignCode ? "emergency" : "syndrome",
+            }))
+          }
         />
       )}
 

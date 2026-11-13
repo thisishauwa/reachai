@@ -54,6 +54,17 @@ describe("selectTriageOutcome", () => {
 });
 
 describe("evaluateClinicalTriage", () => {
+  it("never downgrades an explicit Step 3 look-check danger sign", () => {
+    const outcome = evaluateClinicalTriage("LOOK_CHECK_UNWELL", {
+      E25: "no",
+      E26: "no",
+      E27: "no",
+    });
+    expect(outcome.referralRequired).toBe(true);
+    expect(outcome.severity).toBe("emergency");
+    expect(outcome.conditionLabelEn).not.toContain("Suspected");
+  });
+
   it("triggers emergency referral when AWD symptoms are yes and yes (dire dehydration)", () => {
     const outcome = evaluateClinicalTriage("ACUTE_WATERY_DIARRHOEA", {
       AWD_DEHYDRATION: "yes",
@@ -212,6 +223,5 @@ describe("getFollowUpQuestions (Hardcoded Symptom Questions)", () => {
     expect(questions).toEqual([]);
   });
 });
-
 
 

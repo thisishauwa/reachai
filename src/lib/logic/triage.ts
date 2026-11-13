@@ -229,6 +229,30 @@ export function evaluateClinicalTriage(
   const yesAnswers = Object.keys(answers).filter((k) => isAffirmative(answers[k]));
   const yesCount = yesAnswers.length;
 
+  // Step 3 look-check signs are explicit acute observations. They trigger an
+  // immediate referral before classification and must never be downgraded by
+  // later answers. Keep the wording non-diagnostic: the clinic classifies it.
+  if (code.startsWith("LOOK_CHECK_")) {
+    const bloodContact = code.includes("BLEEDING");
+    const faecalOral = code.includes("JAUNDICE") || code.includes("L4");
+    return {
+      severity: "emergency",
+      referralRequired: true,
+      conditionCode: "ACUTE_LOOK_CHECK_DANGER_SIGN",
+      conditionLabelEn: "Acute danger sign — immediate referral",
+      conditionLabelHa: "[Hausa pending]",
+      guidanceEn:
+        "A visible or caregiver-reported danger sign was recorded. Keep transport moving and refer to the clinic immediately. The app does not diagnose the patient.",
+      guidanceHa: "[Hausa pending]",
+      ipcGuidanceEn: bloodContact
+        ? "Wear gloves, avoid direct contact with blood or body fluids, and do not give an injection."
+        : faecalOral
+          ? "Wash hands with soap and water and clean the toilet and touched surfaces carefully."
+          : null,
+      ipcGuidanceHa: bloodContact || faecalOral ? "[Hausa pending]" : null,
+    };
+  }
+
   // 1. Acute Watery Diarrhoea (AWD)
   if (code.includes("DIARRHOEA") || code.includes("AWD")) {
     const isDehydrated = isAffirmative(answers.AWD_DEHYDRATION);
