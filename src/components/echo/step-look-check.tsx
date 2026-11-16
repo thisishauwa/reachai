@@ -94,7 +94,7 @@ export function StepLookCheck({ presence, ageBand, onContinue, onPrevious }: Ste
   };
 
   return (
-    <div className="w-full flex flex-col gap-6 pb-28 sm:pb-0">
+    <div className="w-full flex flex-col gap-6 pb-28">
       <div className="relative w-full">
         <div className="absolute inset-x-4 -bottom-3 h-12 bg-[#f2f3f5] rounded-[20px] -z-10" />
         <div className="bg-[#f9f9f9] rounded-[20px] p-5 sm:p-10 flex flex-col gap-6">
@@ -193,7 +193,7 @@ export function StepLookCheck({ presence, ageBand, onContinue, onPrevious }: Ste
         </div>
       </div>
 
-      <div className="w-full flex items-center justify-between gap-3 pt-2 sm:static fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-gray-100 sm:border-0 sm:p-0 sm:bg-transparent z-40">
+      <div className="encounter-action-bar">
         {onPrevious ? <button type="button" onClick={onPrevious} className="min-h-11 rounded-[12px] border border-[#e4e8ec] bg-white px-5 text-sm font-medium">Previous</button> : <span />}
         <button
           type="button"

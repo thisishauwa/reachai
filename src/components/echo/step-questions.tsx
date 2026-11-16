@@ -162,7 +162,7 @@ export function StepQuestions({
   // No questions edge case
   if (totalQuestions === 0) {
     return (
-      <div className="w-full flex flex-col gap-5 pb-24 sm:pb-0">
+      <div className="w-full flex flex-col gap-5 pb-28">
         <div className="bg-[#f9f9f9] rounded-[16px] px-5 py-4 flex items-center justify-between">
           <div className="flex flex-col gap-0.5">
             <span className="font-medium text-base text-[#242b33]">
@@ -189,7 +189,7 @@ export function StepQuestions({
           </p>
         </div>
 
-        <div className="w-full flex items-center justify-between pt-2 sm:static fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-gray-100 sm:border-0 sm:p-0 sm:bg-transparent z-40">
+        <div className="encounter-action-bar">
           <button
             type="button"
             onClick={handleSaveDraft}
@@ -210,7 +210,7 @@ export function StepQuestions({
   }
 
   return (
-    <div className="w-full flex flex-col gap-5 pb-24 sm:pb-0">
+    <div className="w-full flex flex-col gap-5 pb-28">
       {/* Patient Bar */}
       <div className="bg-[#f9f9f9] rounded-[16px] px-5 py-4 flex items-center justify-between">
         <div className="flex flex-col gap-0.5">
@@ -378,7 +378,7 @@ export function StepQuestions({
       </div>
 
       {/* Bottom Actions Bar */}
-      <div className="w-full flex items-center justify-between pt-2 sm:static fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-gray-100 sm:border-0 sm:p-0 sm:bg-transparent z-40">
+      <div className="encounter-action-bar">
         <button
           type="button"
           onClick={handleSaveDraft}

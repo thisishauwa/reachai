@@ -129,3 +129,35 @@
     @apply font-sans;
   }
 }
+
+@layer components {
+  .encounter-action-bar {
+    position: fixed;
+    left: 50%;
+    bottom: 0;
+    z-index: 40;
+    display: flex;
+    width: 100%;
+    max-width: 42rem;
+    min-height: 4.5rem;
+    transform: translateX(-50%);
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border-top: 1px solid #e4e8ec;
+    background: rgb(255 255 255 / 96%);
+    padding: 0.75rem 1rem max(0.75rem, env(safe-area-inset-bottom));
+    box-shadow: 0 -10px 30px rgb(15 35 55 / 8%);
+    backdrop-filter: blur(12px);
+  }
+
+  .encounter-action-bar--stacked {
+    display: block;
+  }
+
+  @media (min-width: 640px) {
+    .encounter-action-bar {
+      padding-inline: 1.5rem;
+    }
+  }
+}

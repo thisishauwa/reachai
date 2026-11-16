@@ -35,7 +35,7 @@ export function StepEmergency({ primarySignCode, caregiverReported, onComplete, 
   };
 
   return (
-    <div className="w-full flex flex-col gap-5 pb-28 sm:pb-0">
+    <div className="w-full flex flex-col gap-5 pb-28">
       <section className="rounded-[20px] border border-[#f2c8bd] bg-[#fff5f2] p-5 sm:p-8 flex gap-4" role="alert">
         <div className="size-11 rounded-full bg-[#d44424] text-white flex items-center justify-center shrink-0"><AlertTriangle className="size-6" /></div>
         <div>
@@ -101,7 +101,7 @@ export function StepEmergency({ primarySignCode, caregiverReported, onComplete, 
         })}
       </section>
 
-      <div className="w-full flex items-center justify-between gap-3 pt-2 sm:static fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-gray-100 sm:border-0 sm:p-0 sm:bg-transparent z-40">
+      <div className="encounter-action-bar">
         {onPrevious ? <button type="button" onClick={onPrevious} className="min-h-11 rounded-[12px] border border-[#e4e8ec] bg-white px-5 text-sm font-medium">Previous</button> : <span />}
         <button type="button" onClick={handleContinue} disabled={!allAnswered} className="min-h-11 rounded-[12px] bg-[#0073f3] px-6 sm:px-8 text-sm sm:text-base font-medium text-white shadow-sm disabled:opacity-50">
           Continue to details &amp; consent
