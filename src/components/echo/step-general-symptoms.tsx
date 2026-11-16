@@ -39,7 +39,7 @@ export function StepGeneralSymptoms({
   };
 
   return (
-    <div className="w-full flex flex-col gap-6 pb-24 sm:pb-0">
+    <div className="w-full flex flex-col gap-6 pb-28">
       <div className="relative w-full">
         {/* Decorative background peeking card */}
         <div className="absolute inset-x-4 -bottom-3 h-12 bg-[#f2f3f5] rounded-[20px] -z-10" />
@@ -121,7 +121,7 @@ export function StepGeneralSymptoms({
       </div>
 
       {/* ── Bottom Actions Bar ──────────────────────────────────────── */}
-      <div className="w-full flex items-center justify-between pt-2 sm:static fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-gray-100 sm:border-0 sm:p-0 sm:bg-transparent z-40">
+      <div className="encounter-action-bar">
         <div className="bg-[#eff6ff] px-4 py-2.5 rounded-full inline-flex items-center">
           <span className="text-[#0073f3] text-sm sm:text-base font-medium">
             Normal Symptoms

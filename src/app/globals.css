@@ -129,3 +129,33 @@
     @apply font-sans;
   }
 }
+
+@layer components {
+  .encounter-action-bar {
+    position: fixed;
+    left: 50%;
+    bottom: max(1rem, env(safe-area-inset-bottom));
+    z-index: 40;
+    display: flex;
+    width: calc(100% - 2rem);
+    max-width: 39rem;
+    transform: translateX(-50%);
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    pointer-events: none;
+  }
+
+  .encounter-action-bar > * {
+    pointer-events: auto;
+  }
+
+  .encounter-action-bar > :last-child {
+    margin-left: auto;
+  }
+
+  .encounter-action-bar--stacked {
+    display: block;
+  }
+
+}

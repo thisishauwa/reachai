@@ -134,7 +134,7 @@ export function StepReferral({
   }
 
   return (
-    <div className="w-full flex flex-col gap-6 pb-24 sm:pb-0">
+    <div className="w-full flex flex-col gap-6 pb-28">
       {/* Facility Selection Card */}
       <div className="relative w-full">
         <div className="absolute inset-x-4 -bottom-3 h-12 bg-[#f2f3f5] rounded-[20px] -z-10" />

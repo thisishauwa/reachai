@@ -125,15 +125,17 @@ export function ReferralConsentModal({
       </button>
 
       {/* Primary Action Button */}
-      <button
-        type="button"
-        id="generate-referral-btn"
-        disabled={!confirmed || isLoading}
-        onClick={() => onSubmit({ referralMode })}
-        className="w-full py-4 rounded-[12px] bg-[#0073f3] hover:bg-[#0060cb] disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-base transition-colors cursor-pointer"
-      >
-        {isLoading ? "Generating..." : "Confirm Referral & Generate Code"}
-      </button>
+      <div className="encounter-action-bar">
+        <button
+          type="button"
+          id="generate-referral-btn"
+          disabled={!confirmed || isLoading}
+          onClick={() => onSubmit({ referralMode })}
+          className="w-full py-4 rounded-[12px] bg-[#0073f3] hover:bg-[#0060cb] disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-base transition-colors cursor-pointer"
+        >
+          {isLoading ? "Generating..." : "Confirm Referral & Generate Code"}
+        </button>
+      </div>
     </div>
   );
 }

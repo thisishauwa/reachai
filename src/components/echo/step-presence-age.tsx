@@ -54,7 +54,7 @@ export function StepPresenceAge({
   };
 
   return (
-    <div className="w-full flex flex-col gap-6 pb-24 sm:pb-0">
+    <div className="w-full flex flex-col gap-6 pb-28">
       <div className="relative w-full">
         <div className="absolute inset-x-4 -bottom-3 h-12 bg-[#f2f3f5] rounded-[20px] -z-10" />
 
@@ -195,7 +195,7 @@ export function StepPresenceAge({
         </div>
       </div>
 
-      <div className="w-full flex items-center justify-between gap-3 pt-2 sm:static fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-gray-100 sm:border-0 sm:p-0 sm:bg-transparent z-40">
+      <div className="encounter-action-bar">
           {onPrevious ? (
             <button
               type="button"

@@ -50,7 +50,7 @@ export function TriageBottomSheet({
   return (
     <div
       className={cn(
-        "w-full rounded-[24px] p-6 sm:p-8 flex flex-col gap-6",
+        "w-full rounded-[24px] p-6 pb-28 sm:p-8 sm:pb-28 flex flex-col gap-6",
         isEmergency
           ? "bg-[#fff8f6]"
           : isUrgent
@@ -151,7 +151,7 @@ export function TriageBottomSheet({
       </div>
 
       {/* Bottom Action Button */}
-      <div className="pt-2">
+      <div className="encounter-action-bar">
         {referralRequired ? (
           <button
             type="button"
