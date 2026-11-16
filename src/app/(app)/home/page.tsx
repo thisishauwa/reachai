@@ -15,7 +15,6 @@ import {
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { useSession } from "@/lib/session/session-context";
-import { useRecentPatients } from "@/lib/queries/patients";
 import {
   useRecentEncounters,
   useEncounterTally,
@@ -58,7 +57,7 @@ export default function HomePage() {
     useSession();
   const facilityId = activeFacility?.facilityId;
   const [switcherOpen, setSwitcherOpen] = useState(false);
-  const [greeting, setGreeting] = useState<string | null>(null);
+  const [greeting] = useState(() => getGreeting());
 
   // Zero report state (AC8–AC10)
   const {
@@ -76,14 +75,9 @@ export default function HomePage() {
   >(null);
 
   useEffect(() => {
-    setGreeting(getGreeting());
-  }, []);
-
-  useEffect(() => {
     if (!workflowMode) router.replace("/workflow");
   }, [workflowMode, router]);
 
-  const { data: patients = [] } = useRecentPatients(facilityId, 5);
   const { data: encounters = [] } = useRecentEncounters(facilityId, 5);
   const { data: echoEncounters = [] } = useRecentEchoEncounters(facilityId, 3);
   const { data: pendingReferral } = usePendingReferralAlert(facilityId);
@@ -164,7 +158,7 @@ export default function HomePage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-[2px]">
           <div className="w-full max-w-90 bg-white rounded-[20px] p-6 flex flex-col gap-4 shadow-2xl animate-in zoom-in-95 duration-150">
             <h3 className="font-semibold text-[#242b33]">
-              Change today's status?
+              Change today&apos;s status?
             </h3>
             <p className="text-sm text-[#6e8298]">
               You already recorded{" "}
@@ -471,52 +465,32 @@ export default function HomePage() {
 
         {/* AC8 — Zero Reporting quick actions (≤ 2 taps from home) */}
         {workflowMode === "echo" && (
-          <div className="flex flex-col gap-1.5 mt-1">
-            <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
-              {/* No patients today */}
-              <button
-                type="button"
-                id="zero-report-no-cases-home"
-                onClick={() => handleSetStatus("no_cases")}
-                className={cn(
-                  "group relative rounded-[16px] px-4 py-3 h-[54px] flex items-center justify-between overflow-clip transition-all border-2 cursor-pointer",
-                  todayStatus === "no_cases"
-                    ? "bg-[#dcfce7] border-[#22c55e]"
-                    : "bg-[#f0fdf4] border-transparent hover:border-[#22c55e] hover:bg-[#dcfce7]",
-                )}
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <CalendarX
-                    className={cn(
-                      "size-4 shrink-0",
-                      todayStatus === "no_cases"
-                        ? "text-[#166534]"
-                        : "text-[#22c55e]",
-                    )}
-                  />
-                  <span
-                    className={cn(
-                      "text-[13px] font-medium leading-tight truncate",
-                      todayStatus === "no_cases"
-                        ? "text-[#166534]"
-                        : "text-[#15803d]",
-                    )}
-                  >
-                    No patients today
-                  </span>
-                </div>
-                {todayStatus === "no_cases" && (
-                  <CheckCircle2 className="size-4 text-[#22c55e] shrink-0 ml-1" />
-                )}
-              </button>
+          <button
+            type="button"
+            id="zero-report-no-cases-home"
+            onClick={() => handleSetStatus("no_cases")}
+            className={cn(
+              "group mt-1 w-full min-h-16 rounded-[16px] px-4 py-3 flex items-center justify-between gap-4 text-left transition-all border cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0073f3]/30",
+              todayStatus === "no_cases"
+                ? "bg-[#f0fdf4] border-[#86d9a3]"
+                : "bg-white border-[#e4e8ec] hover:border-[#b8c5d1] hover:bg-[#fafafa]",
+            )}
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <span className={cn("size-10 rounded-[12px] flex items-center justify-center shrink-0", todayStatus === "no_cases" ? "bg-[#dcfce7] text-[#166534]" : "bg-[#f3f5f7] text-[#596b7c]")}>
+                <CalendarX className="size-5" />
+              </span>
+              <span className="min-w-0">
+                <span className={cn("block text-sm font-semibold", todayStatus === "no_cases" ? "text-[#166534]" : "text-[#242b33]")}>No patients today</span>
+                <span className="block text-xs text-[#6e8298] mt-0.5">Use only if no symptomatic patients visited today.</span>
+              </span>
             </div>
-            {/* AC6 — helper text explaining why zero reporting matters */}
-            <p className="text-[11px] sm:text-xs text-[#6e8298] px-1 leading-snug">
-              Tap this only when nobody came in with symptoms today. Without it
-              the dashboard cannot tell a quiet day apart from a day you did not
-              report.
-            </p>
-          </div>
+            {todayStatus === "no_cases" ? (
+              <CheckCircle2 className="size-5 text-[#22c55e] shrink-0" />
+            ) : (
+              <span className="text-xs font-medium text-[#596b7c] shrink-0">Record</span>
+            )}
+          </button>
         )}
       </section>
 

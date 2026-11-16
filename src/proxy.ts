@@ -6,6 +6,10 @@ import type { Database } from "@/lib/supabase/database.types";
 // now `proxy`, not `middleware`). This keeps the Supabase auth session
 // cookie refreshed on every request, per the @supabase/ssr Next.js pattern.
 export async function proxy(request: NextRequest) {
+  if (process.env.LOCAL_DEMO_MODE === "true") {
+    return NextResponse.next({ request });
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient<Database>(

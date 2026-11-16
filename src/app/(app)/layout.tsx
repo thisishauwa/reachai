@@ -17,6 +17,32 @@ import type { SessionData } from "@/lib/session/types";
 import { AppShell } from "@/components/layout/app-shell";
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
+  if (process.env.LOCAL_DEMO_MODE === "true") {
+    const localSession: SessionData = {
+      userId: "00000000-0000-0000-0000-000000000100",
+      displayName: "Demo Clinician",
+      staffId: "LOCAL-DEMO",
+      preferredWorkflow: "echo",
+      memberships: [
+        {
+          facilityId: "00000000-0000-0000-0000-000000000010",
+          organizationId: "00000000-0000-0000-0000-000000000001",
+          facilityName: "Kano Demo Facility",
+          facilityCode: "PHC-DEMO",
+          role: "clinician",
+        },
+      ],
+    };
+
+    return (
+      <SessionProvider session={localSession}>
+        <ServiceWorkerRegistration />
+        <OfflineBootstrap />
+        <AppShell>{children}</AppShell>
+      </SessionProvider>
+    );
+  }
+
   const supabase = await createClient();
   const { data: userData, error: userError } = await supabase.auth.getUser();
 

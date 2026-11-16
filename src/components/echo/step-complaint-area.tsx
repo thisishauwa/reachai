@@ -12,7 +12,7 @@ export function StepComplaintArea({ initialArea, onContinue, onPrevious }: { ini
       <div className="relative w-full">
         <div className="absolute inset-x-4 -bottom-3 h-12 bg-[#f2f3f5] rounded-[20px] -z-10" />
         <div className="bg-[#f9f9f9] rounded-[20px] p-5 sm:p-10 flex flex-col gap-6">
-          <div><p className="text-[#0590f9] text-xs font-semibold uppercase tracking-wider">Step 4 of 6 · Complaint area</p><h2 className="text-xl sm:text-2xl font-semibold text-[#001f3e] mt-1">What is the main problem?</h2><p className="text-sm text-[#6e8298] mt-1">Choose one area · [Hausa pending]</p></div>
+          <div><p className="text-[#0590f9] text-xs font-semibold uppercase tracking-wider">Step 4 of 6 · Main problem</p><h2 className="text-xl sm:text-2xl font-semibold text-[#001f3e] mt-1">What is the main problem?</h2><p className="text-sm text-[#6e8298] mt-1">Choose the one that fits best.</p><p className="text-xs text-[#8a99a8] mt-0.5">Wace ce babbar matsalar? Zabi daya mafi dacewa.</p></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5" role="radiogroup" aria-label="Main complaint area">
             {COMPLAINT_AREAS.map((area) => {
               const active = selected === area.code;

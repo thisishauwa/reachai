@@ -8,12 +8,12 @@ export interface ComplaintArea {
 }
 
 export const COMPLAINT_AREAS: ComplaintArea[] = [
-  { code: "A", label_en: "Fever or hot body", label_ha: "[Hausa pending]" },
-  { code: "B", label_en: "Diarrhoea or vomiting", label_ha: "[Hausa pending]" },
-  { code: "C", label_en: "Rash or skin problem", label_ha: "[Hausa pending]" },
-  { code: "D", label_en: "Headache or neck pain", label_ha: "[Hausa pending]" },
-  { code: "E", label_en: "Cough or breathing problem", label_ha: "[Hausa pending]" },
-  { code: "F", label_en: "Something else, or not sure", label_ha: "[Hausa pending]" },
+  { code: "A", label_en: "Fever or hot body", label_ha: "Zazzabi ko jiki mai zafi" },
+  { code: "B", label_en: "Diarrhoea or vomiting", label_ha: "Gudawa ko amai" },
+  { code: "C", label_en: "Rash or skin problem", label_ha: "Kuraje ko matsalar fata" },
+  { code: "D", label_en: "Headache or neck pain", label_ha: "Ciwon kai ko wuya" },
+  { code: "E", label_en: "Cough or breathing problem", label_ha: "Tari ko matsalar numfashi" },
+  { code: "F", label_en: "Something else, or not sure", label_ha: "Wani abu dabam, ko ba a tabbatar ba" },
 ];
 
 export interface ComplaintOption {
@@ -32,7 +32,79 @@ export interface ComplaintQuestion {
   visibleForAgeBands?: string[];
 }
 
-const option = (value: string, label: string, label_ha = "[Hausa pending]"): ComplaintOption => ({ value, label, label_ha });
+const OPTION_HA_BY_VALUE: Record<string, string> = {
+  "1_2_days": "Kwana 1 zuwa 2",
+  "3_6_days": "Kwana 3 zuwa 6",
+  "7_plus_days": "Kwana 7 ko fiye",
+  yes_easily: "I, cikin sauki",
+  no_stiff: "A'a, wuya ya yi tauri",
+  yes: "I",
+  no: "A'a",
+  unknown: "Ban sani ba",
+  "3_5": "Sau 3 zuwa 5",
+  "6_10": "Sau 6 zuwa 10",
+  over_10: "Fiye da sau 10",
+  sunken_eyes: "Idanu sun fada ciki",
+  very_thirsty: "Kishirwa sosai",
+  slow_skin_pinch: "Fata tana komawa a hankali bayan an tsunkule",
+  none: "Babu",
+  piped: "Ruwan famfo",
+  borehole: "Rijiyar burtsatse",
+  sachet: "Ruwan leda",
+  river_or_pond: "Kogi ko kududdufi",
+  other: "Wani",
+  face_or_behind_ears: "Fuska ko bayan kunne, yana bazuwa kasa",
+  hands_face_genitals: "Hannu, fuska ko al'aura",
+  elsewhere: "Wani wuri",
+  not_applicable: "Bai shafa ba",
+  under_2_weeks: "Kasa da makonni 2",
+  "2_plus_weeks": "Makonni 2 ko fiye",
+  other_not_listed: "Wata matsala da ba ta cikin jerin",
+};
+
+const QUESTION_HA_BY_ID: Record<string, string> = {
+  A1: "Kwana nawa zazzabin ya yi?",
+  A2: "Majiyyacin zai iya sunkuyar da haba ta taba kirji?",
+  A3: "Akwai kuraje?",
+  A4: "Ya riga ya sha maganin zazzabin cizon sauro amma bai samu sauki ba?",
+  A5: "Cikin makonni 3 da suka wuce: akwai beraye a gida, ya kula da mai irin wannan rashin lafiya, ko ya halarci jana'izar wanda ya mutu da zazzabi?",
+  A6: "Akwai matsanancin ciwon baya ko tsoka, kuma ya zauna a gona, daji ko karkara cikin makonni 2 da suka wuce?",
+  A7: "Akwai gudawa ko amai kuma?",
+  A8: "Akwai tari kuma?",
+  B1: "Sau nawa aka yi bayan gida mai laushi ko ruwa cikin awanni 24 da suka wuce?",
+  B2: "Akwai jini ko majina a bayan gida?",
+  B3: "Bayan gidan yana kama da ruwan shinkafa—fari, gizagizai, ba wari sosai?",
+  B4: "Wanne daga cikin wadannan kuke gani?",
+  B5: "Ya yi fitsari cikin awanni 6 da suka wuce?",
+  B6: "Akwai wani a gida da ya yi gudawa mai ruwa cikin kwanaki 7 da suka wuce?",
+  B7: "Daga ina ake samun ruwan sha mafi yawa?",
+  C1: "Akwai zazzabi tare da kurajen?",
+  C2: "A ina kurajen suka fara?",
+  C3: "Idanu ja masu ruwa, tari ko majina?",
+  C4: "Akwai kumbura ko kuraje masu ruwa ko majina, dukkansu iri daya?",
+  C5: "Ya hadu da mai zazzabi da kuraje cikin makonni 3 da suka wuce?",
+  C6: "Akwai ruwa daga kunne, gyambon baki, ko rashin iya cin abinci?",
+  C7: "An yi rigakafin kyanda?",
+  D1: "Akwai zazzabi?",
+  D2: "Majiyyacin zai iya sunkuyar da haba zuwa kirji?",
+  D3: "Haske yana cutar da idanu?",
+  D4: "Akwai tabo masu ruwan shunayya ko duhu da ba sa bacewa idan an matsa da gilashi?",
+  D5: "Jariri kasa da shekara 1: wurin laushin kansa ya kumbura?",
+  D6: "Akwai wanda aka tabbatar yana da sankarau a kusa cikin makonni 2 da suka wuce?",
+  "cough E1": "Tarin ya yi tsawon nawa?",
+  "cough E2": "Akwai zazzabi?",
+  "cough E3": "Akwai jini a majinar tari?",
+  "cough E4": "Akwai ramewa ko gumin dare?",
+  "cough E5": "Akwai toka a makogwaro ko kumburin wuya?",
+  "cough E6": "Akwai kuraje?",
+  F1: "Yaro kasa da shekara 15 ya samu raunin hannu ko kafa kwatsam?",
+  F2: "Dabba ta cije ko ta karce shi cikin watanni 3 da suka wuce?",
+  F3: "Jariri kasa da kwana 28: yana da wahalar shan nono, taurin jiki, ko karkarwa?",
+  F4: "Akwai zazzabi?",
+  F5: "Idan ba daya daga cikin wadannan ba—menene babbar matsalar?",
+};
+
+const option = (value: string, label: string, label_ha = OPTION_HA_BY_VALUE[value] ?? label): ComplaintOption => ({ value, label, label_ha });
 const YES_NO = [option("yes", "Yes", "I"), option("no", "No", "A'a")];
 const YES_NO_UNKNOWN = [...YES_NO, option("unknown", "Don't know", "Ban sani ba")];
 const UNDER_15_BANDS = ["under_28_days", "under_1_year", "under_5", "5_to_17", "0_28_days", "1_11_months", "1_4_years", "5_14_years"];
@@ -45,7 +117,7 @@ const question = (
   prompt_en: string,
   options: ComplaintOption[],
   config: Pick<ComplaintQuestion, "multiple" | "visibleForAgeBands"> = {},
-): ComplaintQuestion => ({ id, answerKey, prompt_en, prompt_ha: "[Hausa pending]", options, ...config });
+): ComplaintQuestion => ({ id, answerKey, prompt_en, prompt_ha: QUESTION_HA_BY_ID[id] ?? prompt_en, options, ...config });
 
 export const COMPLAINT_QUESTION_SETS: Record<ComplaintAreaCode, ComplaintQuestion[]> = {
   A: [
@@ -97,7 +169,7 @@ export const COMPLAINT_QUESTION_SETS: Record<ComplaintAreaCode, ComplaintQuestio
     question("F2", "ANIMAL_BITE", "Bitten or scratched by an animal in last 3 months?", YES_NO),
     question("F3", "SICK_NEWBORN_SIGNS", "Baby under 28 days: feeding difficulty, stiffness, or spasms?", YES_NO, { visibleForAgeBands: NEWBORN_BANDS }),
     question("F4", "FEVER_PRESENT", "Is there fever?", YES_NO),
-    question("F5", "OTHER_MAIN_PROBLEM", "None of these — main problem", [option("other_not_listed", "Other problem — detailed pick list pending PharmAccess")]),
+    question("F5", "OTHER_MAIN_PROBLEM", "None of these — main problem", [option("other_not_listed", "Another problem")]),
   ],
 };
 

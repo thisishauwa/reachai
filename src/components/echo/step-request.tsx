@@ -113,14 +113,8 @@ export function StepRequest({
         </div>
       </div>
 
-      <div className="w-full flex items-center justify-between pt-2 sm:static fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-gray-100 sm:border-0 sm:p-0 sm:bg-transparent z-40">
-        <div className="bg-[#f0f7ff] px-4 py-2.5 rounded-full inline-flex items-center">
-          <span className="text-[#0073f3] text-sm sm:text-base font-medium">
-            Request
-          </span>
-        </div>
-        <div className="flex items-center gap-3">
-          {onPrevious && (
+      <div className="w-full flex items-center justify-between gap-3 pt-2 sm:static fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-gray-100 sm:border-0 sm:p-0 sm:bg-transparent z-40">
+          {onPrevious ? (
             <button
               type="button"
               onClick={onPrevious}
@@ -128,17 +122,16 @@ export function StepRequest({
             >
               Previous
             </button>
-          )}
+          ) : <span />}
           <button
             type="button"
             id="request-continue-btn"
             disabled={!selected}
             onClick={handleContinue}
-            className="rounded-[12px] bg-[#0073f3] hover:bg-[#0060cb] text-white px-8 py-3.5 text-sm sm:text-base font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+            className="min-h-11 rounded-[12px] bg-[#0073f3] hover:bg-[#0060cb] text-white px-8 py-3 text-sm sm:text-base font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
           >
             Continue
           </button>
-        </div>
       </div>
     </div>
   );

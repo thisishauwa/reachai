@@ -44,7 +44,7 @@ export function StepEmergency({ primarySignCode, caregiverReported, onComplete, 
           <p className="text-sm sm:text-base text-[#7a3426] mt-2">
             {caregiverReported ? "Tell the caregiver to bring the patient to the clinic immediately." : "Keep the patient with you while transport is arranged."}
           </p>
-          <p className="text-xs text-[#7a3426] mt-1">[Hausa pending]</p>
+          <p className="text-xs text-[#7a3426] mt-1">A kai shi asibiti yanzu — kada a yi jinkiri.</p>
         </div>
       </section>
 
@@ -53,7 +53,7 @@ export function StepEmergency({ primarySignCode, caregiverReported, onComplete, 
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-[#8a5b00]">Protect yourself now</p>
           <p className="text-sm sm:text-base font-medium text-[#553b08] mt-1">{variant.ipc}</p>
-          <p className="text-xs text-[#72551c] mt-1">[Hausa pending]</p>
+          <p className="text-xs text-[#72551c] mt-1">{variant.ipc_ha}</p>
         </div>
       </section>
 
@@ -61,7 +61,7 @@ export function StepEmergency({ primarySignCode, caregiverReported, onComplete, 
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-[#6e8298]">Referral code</p>
           <p className="font-mono text-2xl font-bold tracking-[0.18em] text-[#001f3e] mt-1">BK-TRN</p>
-          <p className="text-xs text-[#6e8298] mt-1">Give this code to the clinic · [Hausa pending]</p>
+          <p className="text-xs text-[#6e8298] mt-1">Give this code to the clinic · Ba wa asibitin wannan lambar</p>
         </div>
         <a href="tel:+2348000000000" className="min-h-11 rounded-[12px] bg-[#0073f3] px-5 text-white font-medium inline-flex items-center justify-center gap-2">
           <Phone className="size-4" /> Call the clinic
@@ -80,10 +80,12 @@ export function StepEmergency({ primarySignCode, caregiverReported, onComplete, 
           return (
             <fieldset key={question.code} className={cn("rounded-[16px] bg-white border p-4 sm:p-5 flex flex-col gap-3", missing ? "border-[#d44424]" : "border-[#e4e8ec]") }>
               <legend className="sr-only">{question.prompt_en}</legend>
-              <p className="text-xs font-semibold uppercase tracking-wider text-[#0590f9]">{question.code}</p>
-              <p className="text-sm sm:text-base font-medium text-[#242b33]">{question.prompt_en}</p>
+              <div className="flex items-start gap-2">
+                <span className="mt-0.5 rounded-full bg-[#eef5fc] px-2 py-0.5 text-[10px] font-semibold text-[#4c6f91] shrink-0">{question.code}</span>
+                <p className="text-sm sm:text-base font-medium text-[#242b33]">{question.prompt_en}</p>
+              </div>
               <p className="text-xs text-[#6e8298]">{question.prompt_ha}</p>
-              <div className="grid grid-cols-3 gap-2">
+              <div className={cn("grid gap-2", options.length === 2 ? "grid-cols-2" : "grid-cols-3")}>
                 {options.map((option) => {
                   const selected = answers[question.code] === option.value;
                   return (

@@ -108,7 +108,11 @@ export function StepLookCheck({ presence, ageBand, onContinue, onPrevious }: Ste
                 ? "Tick all that apply. Ask only about the fit. The patient is here, so the rest you can see."
                 : "You cannot see the patient, so ask. Don't know is a real answer — do not guess."}
             </p>
-            <p className="text-xs text-[#6e8298]">[Hausa pending]</p>
+            <p className="text-xs text-[#8a99a8]">
+              {isPresent
+                ? "Dubi majiyyacin. Idan ka ga daya daga cikin wadannan, zabe shi."
+                : "Majiyyacin ba ya nan. Yi tambayoyin, kuma kada ka yi zato idan ba a sani ba."}
+            </p>
           </div>
 
           {isPresent ? (
@@ -130,7 +134,7 @@ export function StepLookCheck({ presence, ageBand, onContinue, onPrevious }: Ste
                     )}
                   >
                     <span className="flex flex-col gap-0.5">
-                      <span className="text-sm sm:text-base font-medium"><span className="mr-2 text-[#6e8298]">{sign.code}</span>{sign.label_en}</span>
+                      <span className="text-sm sm:text-base font-medium flex items-start gap-2"><span className="rounded-full bg-[#eef5fc] px-2 py-0.5 text-[10px] font-semibold text-[#4c6f91] shrink-0">{sign.code}</span><span>{sign.label_en}</span></span>
                       <span className="text-xs text-[#6e8298]">{sign.label_ha}</span>
                     </span>
                     <span className={cn("size-6 rounded-[6px] border flex items-center justify-center shrink-0", selected ? "bg-[#0073f3] border-[#0073f3] text-white" : "border-[#b8c5d1]") }>
@@ -143,7 +147,7 @@ export function StepLookCheck({ presence, ageBand, onContinue, onPrevious }: Ste
           ) : (
             <div className="flex flex-col gap-4">
               <div className="rounded-[14px] border border-[#d5e7fa] bg-[#f0f7ff] px-4 py-3 text-sm text-[#0051a8]">
-                Caregiver-reported · the patient is not here. <span className="block text-xs mt-0.5">[Hausa pending]</span>
+                Caregiver-reported · the patient is not here. <span className="block text-xs mt-0.5">Wani ne yake bayar da rahoton · majiyyacin ba ya nan.</span>
               </div>
               {questions.map((question, index) => {
                 const missing = hasStarted && !answers[question.code];
@@ -183,7 +187,7 @@ export function StepLookCheck({ presence, ageBand, onContinue, onPrevious }: Ste
             <div role="note" className="rounded-[14px] border border-[#cfd8e1] bg-[#f5f7f9] p-4 text-sm text-[#3f4e5d]">
               <p className="font-semibold">This case cannot end as routine.</p>
               <p className="mt-1">Ask the caregiver to bring the patient in for urgent review.</p>
-              <p className="text-xs mt-1">[Hausa pending]</p>
+              <p className="text-xs mt-1">A nemi mai kula da shi ya kawo majiyyacin a duba shi cikin gaggawa.</p>
             </div>
           )}
         </div>

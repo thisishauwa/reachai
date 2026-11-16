@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -17,7 +17,7 @@ import { StepAssessment } from "@/components/reach/step-assessment";
 import { StepReview } from "@/components/reach/step-review";
 import { INITIAL_REACH_STATE, type ReachEncounterState, type ReachStep } from "@/lib/reach/types";
 
-export default function NewReachEncounterPage() {
+function NewReachEncounterContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
@@ -224,5 +224,13 @@ export default function NewReachEncounterPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function NewReachEncounterPage() {
+  return (
+    <Suspense fallback={null}>
+      <NewReachEncounterContent />
+    </Suspense>
   );
 }

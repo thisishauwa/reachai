@@ -29,15 +29,15 @@ describe("StepComplaintQuestions", () => {
   it("matches Journey 3: short fever, all negative, no bridge", () => {
     render(<StepComplaintQuestions area="A" ageBand="18_to_49" encounterId="encounter-1" onComplete={vi.fn()} />);
     completeSetABase();
-    expect(screen.queryByText(/Shown because A7 is Yes/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Shown because A8 is Yes/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/You mentioned diarrhoea or vomiting/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/You mentioned a cough/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Continue to result/ })).toBeEnabled();
   });
 
   it("matches Journey 7: A7 reveals B1-B4 in the grey bridge and keeps Continue disabled", () => {
     render(<StepComplaintQuestions area="A" ageBand="18_to_49" encounterId="encounter-1" onComplete={vi.fn()} />);
     completeSetABase("yes");
-    expect(screen.getByText("Shown because A7 is Yes")).toBeInTheDocument();
+    expect(screen.getByText(/You mentioned diarrhoea or vomiting/)).toBeInTheDocument();
     expect(screen.getByText("B1")).toBeInTheDocument();
     expect(screen.getByText("B4")).toBeInTheDocument();
     expect(screen.getAllByText("Required — choose an answer.")).toHaveLength(4);
