@@ -14,6 +14,7 @@ import {
   Camera,
   Check,
   CheckCircle2,
+  ArrowRight,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -57,7 +58,6 @@ interface StepSyndromeProps {
 }
 
 export function StepSyndrome({
-  sessionCode,
   onSelect,
   onPrevious,
 }: StepSyndromeProps) {
@@ -77,7 +77,8 @@ export function StepSyndrome({
   const toggle = (code: string) =>
     setChecked((prev) => {
       const next = new Set(prev);
-      next.has(code) ? next.delete(code) : next.add(code);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
       return next;
     });
 
@@ -160,6 +161,10 @@ export function StepSyndrome({
     const hasDangerSigns = checked.size > 0 || hasUnusual || dehydration === "severe";
     onSelect(allCodes, syndromeIds, labels, hasDangerSigns);
   };
+
+  const selectedDangerCount =
+    checked.size + (hasUnusual ? 1 : 0) + (dehydration === "severe" ? 1 : 0);
+  const hasSelectedDanger = selectedDangerCount > 0;
 
   return (
     <div className="w-full flex flex-col gap-6 pb-24 sm:pb-0">
@@ -481,18 +486,33 @@ export function StepSyndrome({
       </div>
 
       {/* ── Bottom Actions Bar ──────────────────────────────────────── */}
-      <div className="w-full flex items-center justify-between pt-2 sm:static fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-gray-100 sm:border-0 sm:p-0 sm:bg-transparent z-40">
-        <div className="bg-[#f9f3ff] px-4 py-2.5 rounded-full inline-flex items-center">
-          <span className="text-[#9175a7] text-sm sm:text-base font-medium">
-            Danger Signs
-          </span>
-        </div>
-        <div className="flex items-center gap-3">
+      <div className="w-full pt-2 sm:static fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-[#e8edf2] sm:border-0 sm:p-0 sm:bg-transparent z-40">
+        <div className="w-full flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div
+            role="status"
+            className={cn(
+              "min-h-11 flex items-center gap-2 text-sm font-medium",
+              hasSelectedDanger ? "text-[#a03823]" : "text-[#596b7c]",
+            )}
+          >
+            {hasSelectedDanger ? (
+              <AlertTriangle className="size-5 shrink-0" aria-hidden="true" />
+            ) : (
+              <CheckCircle2 className="size-5 shrink-0 text-[#27824a]" aria-hidden="true" />
+            )}
+            <span>
+              {hasSelectedDanger
+                ? `${selectedDangerCount} danger sign${selectedDangerCount === 1 ? "" : "s"} selected`
+                : "No danger signs selected"}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-[auto_1fr] gap-3 sm:flex sm:items-center">
           {onPrevious && (
             <button
               type="button"
               onClick={onPrevious}
-              className="rounded-[12px] border border-[#e4e8ec] bg-white hover:bg-[#fafafa] text-[#495766] px-5 py-3.5 text-sm sm:text-base font-medium transition-colors cursor-pointer"
+              className="min-h-11 rounded-[12px] border border-[#d8e0e7] bg-white hover:bg-[#f7f9fb] text-[#3f4e5d] px-5 text-sm sm:text-base font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0073f3] focus-visible:ring-offset-2"
             >
               Previous
             </button>
@@ -501,19 +521,12 @@ export function StepSyndrome({
             type="button"
             id="symptom-continue-btn"
             onClick={handleContinue}
-            className="rounded-[12px] bg-[#0073f3] hover:bg-[#0060cb] text-white px-6 sm:px-8 py-3.5 text-sm sm:text-base font-medium transition-colors cursor-pointer shadow-sm flex items-center gap-2"
+            className="min-h-11 rounded-[12px] bg-[#0073f3] hover:bg-[#0060cb] text-white px-5 sm:px-7 text-sm sm:text-base font-medium transition-colors cursor-pointer shadow-sm inline-flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0073f3] focus-visible:ring-offset-2"
           >
-            {checked.size > 0 || hasUnusual || dehydration === "severe" ? (
-              <>
-                <span>Continue to Danger Sign Questions</span>
-                <span className="text-xs font-normal opacity-90 bg-white/20 px-2 py-0.5 rounded-full">
-                  {checked.size + (hasUnusual ? 1 : 0) + (dehydration === "severe" ? 1 : 0)} selected
-                </span>
-              </>
-            ) : (
-              <span>No danger signs — Continue to Normal Symptoms</span>
-            )}
+            <span>{hasSelectedDanger ? "Continue to questions" : "Continue"}</span>
+            <ArrowRight className="size-4" aria-hidden="true" />
           </button>
+          </div>
         </div>
       </div>
     </div>
