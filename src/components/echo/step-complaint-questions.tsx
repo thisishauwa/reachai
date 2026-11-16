@@ -18,14 +18,19 @@ function QuestionCard({
   question,
   answer,
   showError,
+  caregiverReported,
   onAnswer,
 }: {
   question: DisplayQuestion;
   answer?: ComplaintAnswer;
   showError: boolean;
+  caregiverReported: boolean;
   onAnswer: (answer: ComplaintAnswer) => void;
 }) {
   const selectedValues = new Set(Array.isArray(answer) ? answer : answer ? [answer] : []);
+  const choices = caregiverReported && !question.multiple && !question.options.some((choice) => choice.value === "unknown")
+    ? [...question.options, { value: "unknown", label: "Don't know", label_ha: "Ban sani ba" }]
+    : question.options;
 
   const selectOption = (value: string) => {
     if (!question.multiple) {
@@ -51,8 +56,8 @@ function QuestionCard({
         <p className="text-sm sm:text-base font-medium text-[#242b33] mt-1">{question.prompt_en}</p>
         <p className="text-xs text-[#6e8298] mt-1">{question.prompt_ha}</p>
       </div>
-      <div className={cn("grid gap-2", question.options.length === 2 ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-3")}>
-        {question.options.map((choice) => {
+      <div className={cn("grid gap-2", choices.length === 2 ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-3")}>
+        {choices.map((choice) => {
           const selected = selectedValues.has(choice.value);
           return (
             <button
@@ -80,12 +85,13 @@ interface StepComplaintQuestionsProps {
   area: ComplaintAreaCode;
   ageBand: string;
   encounterId: string;
+  caregiverReported?: boolean;
   initialAnswers?: Record<string, ComplaintAnswer>;
   onComplete: (questionSetId: string, answers: Record<string, ComplaintAnswer>) => void;
   onPrevious?: () => void;
 }
 
-export function StepComplaintQuestions({ area, ageBand, encounterId, initialAnswers = {}, onComplete, onPrevious }: StepComplaintQuestionsProps) {
+export function StepComplaintQuestions({ area, ageBand, encounterId, caregiverReported = false, initialAnswers = {}, onComplete, onPrevious }: StepComplaintQuestionsProps) {
   const { userId } = useSession();
   const [answers, setAnswers] = useState<Record<string, ComplaintAnswer>>(initialAnswers);
   const questions = useMemo(() => visibleComplaintQuestions(area, answers, ageBand), [ageBand, area, answers]);
@@ -138,6 +144,7 @@ export function StepComplaintQuestions({ area, ageBand, encounterId, initialAnsw
       question={item}
       answer={answers[item.answerKey]}
       showError={hasStarted && !hasComplaintAnswer(answers[item.answerKey])}
+      caregiverReported={caregiverReported}
       onAnswer={(value) => setAnswer(item.answerKey, value)}
     />
   ));

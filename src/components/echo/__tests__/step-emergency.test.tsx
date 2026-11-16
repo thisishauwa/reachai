@@ -34,7 +34,12 @@ describe("StepEmergency", () => {
   it.each([
     ["L5", ["E1", "E2", "E3", "E4"], /yellow eyes start after the fever/i],
     ["L3", ["E5", "E6", "E7", "E8"], /fever for 3 or more days/i],
+    ["L1", ["E9", "E10", "E11", "E12"], /is there fever/i],
+    ["L2", ["E9", "E10", "E11", "E12"], /is there fever/i],
     ["L4", ["E13", "E14", "E15", "E16"], /watery diarrhoea in the last 24 hours/i],
+    ["L6", ["E17", "E18", "E19", "E20"], /is there fever/i],
+    ["L7", ["E21", "E22", "E23", "E24"], /cord cut with a clean blade/i],
+    ["L8", ["E25", "E26", "E27"], /is there fever/i],
   ])("renders the exact in-scope question set for %s", (sign, ids, firstPrompt) => {
     render(<StepEmergency primarySignCode={sign} caregiverReported={false} onComplete={vi.fn()} />);
     ids.forEach((id) => expect(screen.getByText(id)).toBeInTheDocument());

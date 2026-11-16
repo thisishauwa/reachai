@@ -191,6 +191,228 @@ export function evaluateGeneralSymptomsTriage(
   };
 }
 
+interface ComplaintCategoryMatch {
+  code: string;
+  label: string;
+  severity: TriageSeverity;
+  priorityDisease?: boolean;
+  guidance: string;
+  ipc?: string | null;
+}
+
+function answerEquals(answers: Record<string, unknown>, key: string, value: string): boolean {
+  return answers[key] === value;
+}
+
+function durationIsThreeOrMore(answers: Record<string, unknown>): boolean {
+  return answers.FEVER_DURATION === "3_6_days" || answers.FEVER_DURATION === "7_plus_days";
+}
+
+function selectedCount(value: unknown): number {
+  return Array.isArray(value) ? value.filter((item) => item !== "none").length : 0;
+}
+
+function complaintRoutineOutcome(area: string): ClinicalTriageOutcome {
+  const fever = area === "A";
+  return {
+    severity: "routine",
+    referralRequired: false,
+    conditionCode: fever ? "BASELINE_FEBRILE_ILLNESS" : "NO_CATEGORY_MATCH",
+    conditionLabelEn: fever ? "Baseline febrile illness" : "No specific category identified",
+    conditionLabelHa: "[Hausa pending]",
+    guidanceEn: fever
+      ? "No danger sign or priority pattern matched. Advise fluids and rest, and explain the danger signs that require an immediate clinic review."
+      : "No danger sign or priority pattern matched. Give routine within-scope advice and explain when to return or go to a clinic.",
+    guidanceHa: "[Hausa pending]",
+    ipcGuidanceEn: null,
+    ipcGuidanceHa: null,
+  };
+}
+
+/** Client-side prototype mirror of the v0.3 complaint rule table. */
+export function evaluateComplaintTriage(
+  answers: Record<string, unknown>,
+): ClinicalTriageOutcome {
+  const area = typeof answers.COMPLAINT_AREA === "string" ? answers.COMPLAINT_AREA : "";
+  const matches: ComplaintCategoryMatch[] = [];
+  const add = (match: ComplaintCategoryMatch) => {
+    if (!matches.some((item) => item.code === match.code)) matches.push(match);
+  };
+
+  const bloodInStool = answerEquals(answers, "BLOOD_OR_MUCUS_STOOL", "yes");
+  const riceWater = answerEquals(answers, "RICE_WATER_STOOL", "yes");
+  const diarrhoeaBridge = answerEquals(answers, "DIARRHOEA_OR_VOMITING", "yes");
+  const hasStoolCount = typeof answers.WATERY_STOOL_COUNT === "string";
+
+  if ((hasStoolCount && riceWater && !bloodInStool) || (diarrhoeaBridge && riceWater)) {
+    const acute = selectedCount(answers.DEHYDRATION_SIGNS) >= 2 || answerEquals(answers, "URINE_LAST_6_HOURS", "no");
+    add({
+      code: "CHOLERA_PATTERN",
+      label: acute ? "Signs consistent with cholera, with severe dehydration" : "Signs consistent with cholera",
+      severity: acute ? "emergency" : "urgent",
+      priorityDisease: true,
+      guidance: "Give ORS now, do not give an anti-diarrhoeal, and arrange the indicated referral. This is not a diagnosis.",
+      ipc: "Wash hands with soap. Put stool and vomit in the latrine and clean contaminated surfaces with bleach.",
+    });
+  }
+
+  if (bloodInStool) {
+    add({
+      code: "DYSENTERY_PATTERN",
+      label: "Signs consistent with dysentery",
+      severity: "urgent",
+      guidance: "Give ORS as appropriate and refer today for clinical assessment. This is not a diagnosis.",
+      ipc: "Wash hands with soap and clean contaminated surfaces carefully.",
+    });
+  }
+
+  if (durationIsThreeOrMore(answers) && diarrhoeaBridge && answerEquals(answers, "BLOOD_OR_MUCUS_STOOL", "no")) {
+    add({
+      code: "TYPHOID_PATTERN",
+      label: "Signs consistent with typhoid",
+      severity: "urgent",
+      guidance: "Refer today for clinical assessment and avoid empirical antibiotics that could delay correct testing. This is not a diagnosis.",
+      ipc: "Use careful hand hygiene and safe food and water precautions.",
+    });
+  }
+
+  const stiffNeck = answerEquals(answers, "NECK_FLEXION", "no_stiff");
+  const meningitisPattern =
+    (typeof answers.FEVER_DURATION === "string" && stiffNeck) ||
+    (answerEquals(answers, "FEVER_PRESENT", "yes") && stiffNeck) ||
+    answerEquals(answers, "BULGING_FONTANELLE", "yes");
+  if (meningitisPattern) {
+    const acute = answerEquals(answers, "NON_BLANCHING_SPOTS", "yes") || (stiffNeck && typeof answers.FEVER_DURATION === "string");
+    add({
+      code: "MENINGITIS_PATTERN",
+      label: answerEquals(answers, "NON_BLANCHING_SPOTS", "yes")
+        ? "Signs consistent with meningitis, with septicaemia warning signs"
+        : "Signs consistent with meningitis",
+      severity: acute ? "emergency" : "urgent",
+      priorityDisease: true,
+      guidance: "Arrange an immediate clinical assessment. Do not delay the referral. This is not a diagnosis.",
+      ipc: "Keep some distance, use a mask if available, encourage cough covering, and ventilate the room.",
+    });
+  }
+
+  const measlesPattern =
+    answerEquals(answers, "FEVER_PRESENT", "yes") &&
+    answerEquals(answers, "RASH_START_LOCATION", "face_or_behind_ears") &&
+    answerEquals(answers, "MEASLES_EYE_COUGH_SIGNS", "yes");
+  if (measlesPattern) {
+    add({
+      code: "MEASLES_PATTERN",
+      label: "Signs consistent with measles",
+      severity: answerEquals(answers, "COUGH_PRESENT", "yes") ? "emergency" : "urgent",
+      priorityDisease: true,
+      guidance: "Give supportive care within scope and arrange the indicated referral. Do not give routine antibiotics or steroids. This is not a diagnosis.",
+      ipc: "Keep the patient away from babies and pregnant women, ventilate the room, and do not share clothes or bedding.",
+    });
+  }
+
+  const lassaIndicators = ["MALARIA_MEDICINE_NO_IMPROVEMENT", "LASSA_EXPOSURE"].filter((key) => answerEquals(answers, key, "yes")).length;
+  if (durationIsThreeOrMore(answers) && lassaIndicators >= 2) {
+    add({
+      code: "LASSA_VHF_PATTERN",
+      label: "Signs consistent with Lassa fever or another viral haemorrhagic fever",
+      severity: "urgent",
+      priorityDisease: true,
+      guidance: "Refer today, avoid aspirin, NSAIDs and injections, and keep the patient separated while transport is arranged. This is not a diagnosis.",
+      ipc: "Wear gloves, avoid direct contact with body fluids, and wash hands before and after contact.",
+    });
+  }
+
+  if (durationIsThreeOrMore(answers) && answerEquals(answers, "YELLOW_FEVER_EXPOSURE", "yes")) {
+    add({
+      code: "YELLOW_FEVER_PATTERN",
+      label: "Signs consistent with yellow fever",
+      severity: "urgent",
+      priorityDisease: true,
+      guidance: "Refer today and avoid aspirin or NSAIDs. This is not a diagnosis.",
+      ipc: "Use standard precautions and advise sleeping under a mosquito net.",
+    });
+  }
+
+  if (answerEquals(answers, "COUGH_DURATION", "2_plus_weeks") &&
+      (answerEquals(answers, "BLOOD_IN_SPUTUM", "yes") || answerEquals(answers, "WEIGHT_LOSS_OR_NIGHT_SWEATS", "yes"))) {
+    add({
+      code: "TB_SCREENING_PATTERN",
+      label: "Signs consistent with TB screening criteria",
+      severity: "routine",
+      guidance: "Refer for testing within the week. Avoid cough medicines or antibiotics that could delay assessment. This is not a diagnosis.",
+      ipc: "Encourage cough covering and keep the area well ventilated.",
+    });
+  }
+
+  if (answerEquals(answers, "DIPHTHERIA_SIGNS", "yes")) {
+    add({
+      code: "DIPHTHERIA_PATTERN",
+      label: "Signs consistent with diphtheria",
+      severity: "urgent",
+      guidance: "Refer today and do not delay for treatment at the outlet. This is not a diagnosis.",
+      ipc: "Use a mask if available, keep some distance, and ventilate the room.",
+    });
+  }
+
+  if (answerEquals(answers, "RASH_START_LOCATION", "hands_face_genitals") && answerEquals(answers, "BLISTERS_SAME_STAGE", "yes")) {
+    add({
+      code: "MPOX_PATTERN",
+      label: "Signs consistent with mpox",
+      severity: "urgent",
+      guidance: "Refer today and avoid direct contact with the rash. This is not a diagnosis.",
+      ipc: "Do not share clothes or bedding; use gloves if available and wash hands carefully.",
+    });
+  }
+
+  if (answerEquals(answers, "WEAK_LIMB", "yes")) {
+    add({
+      code: "AFP_PATTERN",
+      label: "Signs consistent with acute flaccid paralysis",
+      severity: "urgent",
+      guidance: "Refer today and notify the surveillance contact immediately. Give nothing that delays assessment. This is not a diagnosis.",
+    });
+  }
+
+  if (answerEquals(answers, "ANIMAL_BITE", "yes")) {
+    add({
+      code: "RABIES_EXPOSURE_PATTERN",
+      label: "Rabies exposure requiring assessment",
+      severity: "urgent",
+      guidance: "Wash the wound thoroughly and refer today for rabies post-exposure assessment. This is not a diagnosis.",
+    });
+  }
+
+  if (answerEquals(answers, "SICK_NEWBORN_SIGNS", "yes")) {
+    add({
+      code: "NEONATAL_TETANUS_PATTERN",
+      label: "Newborn danger signs, including neonatal tetanus pattern",
+      severity: "emergency",
+      guidance: "Refer now. Keep the baby warm and do not dispense medicine at the outlet. This is not a diagnosis.",
+    });
+  }
+
+  if (matches.length === 0) return complaintRoutineOutcome(area);
+
+  const pregnant = answers.PREGNANCY_STATUS === "pregnant";
+  const ranked = matches
+    .map((match) => pregnant && match.priorityDisease && match.severity === "urgent" ? { ...match, severity: "emergency" as const } : match)
+    .sort((a, b) => SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity]);
+  const top = ranked[0];
+  const labels = ranked.map((match) => match.label);
+
+  return {
+    severity: top.severity,
+    referralRequired: true,
+    conditionCode: ranked.map((match) => match.code).join("+"),
+    conditionLabelEn: labels.join("; also "),
+    conditionLabelHa: "[Hausa pending]",
+    guidanceEn: top.guidance,
+    guidanceHa: "[Hausa pending]",
+    ipcGuidanceEn: top.ipc ?? null,
+    ipcGuidanceHa: top.ipc ? "[Hausa pending]" : null,
+  };
+}
+
 /**
  * Evaluates triage for multiple syndromes and returns the worst (highest-severity) outcome.
  * Used when a patient has more than one chief complaint selected.
@@ -202,6 +424,9 @@ export function evaluateMultiSyndromeTriage(
   generalSymptomCodes: string[] = []
 ): ClinicalTriageOutcome {
   if (syndromeIds.length === 0) {
+    if (generalSymptomCodes.some((code) => code.startsWith("COMPLAINT_")) || typeof answers.COMPLAINT_AREA === "string") {
+      return evaluateComplaintTriage(answers);
+    }
     return evaluateGeneralSymptomsTriage(generalSymptomCodes);
   }
   if (syndromeIds.length === 1) {
@@ -233,23 +458,100 @@ export function evaluateClinicalTriage(
   // immediate referral before classification and must never be downgraded by
   // later answers. Keep the wording non-diagnostic: the clinic classifies it.
   if (code.startsWith("LOOK_CHECK_")) {
-    const bloodContact = code.includes("BLEEDING");
-    const faecalOral = code.includes("JAUNDICE") || code.includes("L4");
+    let conditionCode = "ACUTE_LOOK_CHECK_DANGER_SIGN";
+    let conditionLabelEn = "Acute danger sign — immediate referral";
+    let ipcGuidanceEn: string | null = null;
+
+    if (code.includes("JAUNDICE")) {
+      conditionCode = answerEquals(answers, "E1", "yes") ? "YELLOW_FEVER_EMERGENCY_PATTERN" : "JAUNDICE_UNCLASSIFIED";
+      conditionLabelEn = answerEquals(answers, "E1", "yes")
+        ? answerEquals(answers, "E3", "yes")
+          ? "Signs consistent with yellow fever, with a severe warning sign"
+          : "Signs consistent with yellow fever"
+        : "Jaundice danger sign requiring immediate assessment";
+      ipcGuidanceEn = "Wear gloves now. Do not give an injection. Do not touch blood or vomit with bare hands.";
+    } else if (code.includes("BLEEDING")) {
+      const lassaPattern = answerEquals(answers, "E5", "yes") && ["E6", "E7", "E8"].some((key) => answerEquals(answers, key, "yes"));
+      conditionCode = lassaPattern ? "LASSA_VHF_EMERGENCY_PATTERN" : "BLEEDING_UNCLASSIFIED";
+      conditionLabelEn = lassaPattern
+        ? "Signs consistent with Lassa fever or another viral haemorrhagic fever"
+        : "Bleeding danger sign requiring immediate assessment";
+      ipcGuidanceEn = "Wear gloves now. Do not give an injection. Do not touch blood, vomit or urine with bare hands.";
+    } else if (code.includes("FIT") || code.includes("CONFUSION")) {
+      const meningitis = answerEquals(answers, "E11", "yes") ||
+        (answerEquals(answers, "E9", "yes") && (answerEquals(answers, "E10", "yes") || answerEquals(answers, "E12", "yes")));
+      conditionCode = meningitis ? "MENINGITIS_EMERGENCY_PATTERN" : "SEVERE_NEUROLOGIC_DANGER_SIGN";
+      conditionLabelEn = meningitis
+        ? answerEquals(answers, "E11", "yes")
+          ? "Signs consistent with meningitis, with septicaemia warning signs"
+          : "Signs consistent with meningitis"
+        : "Fit or reduced consciousness requiring immediate assessment";
+    } else if (code.includes("COLLAPSE")) {
+      const cholera = answerEquals(answers, "E13", "yes") && answerEquals(answers, "E14", "yes");
+      conditionCode = cholera ? "CHOLERA_SEVERE_EMERGENCY_PATTERN" : answerEquals(answers, "E13", "yes") ? "SEVERE_DEHYDRATION" : "COLLAPSE_DANGER_SIGN";
+      conditionLabelEn = cholera
+        ? "Signs consistent with cholera, with severe dehydration"
+        : answerEquals(answers, "E13", "yes")
+          ? "Severe dehydration danger signs"
+          : "Collapse or inability to drink requiring immediate assessment";
+      if (answerEquals(answers, "E13", "yes")) {
+        ipcGuidanceEn = "Wash your hands with soap. Put stool and vomit in the latrine and clean contaminated surfaces with bleach.";
+      }
+    } else if (code.includes("BREATHING")) {
+      const measles = answerEquals(answers, "E17", "yes") && answerEquals(answers, "E18", "yes");
+      const diphtheria = answerEquals(answers, "E20", "yes");
+      const tb = answerEquals(answers, "E19", "yes");
+      conditionCode = measles ? "MEASLES_COMPLICATION_EMERGENCY_PATTERN" : diphtheria ? "DIPHTHERIA_EMERGENCY_PATTERN" : tb ? "TB_EMERGENCY_SCREENING_PATTERN" : "BREATHING_DANGER_SIGN";
+      conditionLabelEn = measles
+        ? "Signs consistent with measles with a breathing complication"
+        : diphtheria
+          ? "Signs consistent with diphtheria"
+          : tb
+            ? "Signs meeting TB screening criteria, with an acute breathing danger sign"
+            : "Breathing danger sign requiring immediate assessment";
+      ipcGuidanceEn = "Keep some distance, use a mask if available, encourage cough covering, and ventilate the room.";
+    } else if (code.includes("NEWBORN")) {
+      const tetanus = answerEquals(answers, "E22", "yes");
+      conditionCode = tetanus ? "NEONATAL_TETANUS_EMERGENCY_PATTERN" : "NEWBORN_SEPSIS_PATTERN";
+      conditionLabelEn = tetanus ? "Signs consistent with neonatal tetanus" : "Newborn danger signs requiring immediate assessment";
+    } else if (code.includes("UNWELL")) {
+      const complaint = evaluateComplaintTriage(answers);
+      if (complaint.referralRequired) {
+        conditionCode = complaint.conditionCode;
+        conditionLabelEn = complaint.conditionLabelEn;
+        ipcGuidanceEn = complaint.ipcGuidanceEn;
+      } else {
+        conditionCode = "ACUTE_UNCLASSIFIED_VENDOR_JUDGEMENT";
+        conditionLabelEn = "Signs that need an immediate clinic check";
+        ipcGuidanceEn = "Use standard precautions, keep some distance, ventilate the room, and avoid contact with body fluids.";
+      }
+    }
+
     return {
       severity: "emergency",
       referralRequired: true,
-      conditionCode: "ACUTE_LOOK_CHECK_DANGER_SIGN",
-      conditionLabelEn: "Acute danger sign — immediate referral",
+      conditionCode,
+      conditionLabelEn,
       conditionLabelHa: "[Hausa pending]",
       guidanceEn:
         "A visible or caregiver-reported danger sign was recorded. Keep transport moving and refer to the clinic immediately. The app does not diagnose the patient.",
       guidanceHa: "[Hausa pending]",
-      ipcGuidanceEn: bloodContact
-        ? "Wear gloves, avoid direct contact with blood or body fluids, and do not give an injection."
-        : faecalOral
-          ? "Wash hands with soap and water and clean the toilet and touched surfaces carefully."
-          : null,
-      ipcGuidanceHa: bloodContact || faecalOral ? "[Hausa pending]" : null,
+      ipcGuidanceEn,
+      ipcGuidanceHa: ipcGuidanceEn ? "[Hausa pending]" : null,
+    };
+  }
+
+  if (code === "OTHER_PRIORITY" && isAffirmative(answers.LOOK_CHECK_UNKNOWN)) {
+    return {
+      severity: "urgent",
+      referralRequired: true,
+      conditionCode: "CAREGIVER_REPORTED_UNCERTAINTY",
+      conditionLabelEn: "Signs that need a clinic check",
+      conditionLabelHa: "[Hausa pending]",
+      guidanceEn: "The patient was not present and at least one danger-sign answer was unknown. Bring the patient here or go to a clinic today. This is not a diagnosis.",
+      guidanceHa: "[Hausa pending]",
+      ipcGuidanceEn: "Use gloves if available, avoid injections, keep some distance, ventilate the room, and wash hands carefully.",
+      ipcGuidanceHa: "[Hausa pending]",
     };
   }
 

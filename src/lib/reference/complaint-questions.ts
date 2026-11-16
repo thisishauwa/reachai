@@ -72,7 +72,7 @@ export const COMPLAINT_QUESTION_SETS: Record<ComplaintAreaCode, ComplaintQuestio
     question("C2", "RASH_START_LOCATION", "Where did the rash start?", [option("face_or_behind_ears", "Face or behind ears, spreading down"), option("hands_face_genitals", "Hands, face or genitals"), option("elsewhere", "Elsewhere")]),
     question("C3", "MEASLES_EYE_COUGH_SIGNS", "Red watery eyes, cough or runny nose?", YES_NO),
     question("C4", "BLISTERS_SAME_STAGE", "Blisters or pus-filled bumps, all at the same stage?", YES_NO),
-    question("C5", "RASH_CONTACT", "Contact with someone with fever and rash in last 3 weeks?", YES_NO),
+    question("C5", "RASH_CONTACT", "Contact with someone with fever and rash in last 3 weeks?", YES_NO_UNKNOWN),
     question("C6", "RASH_COMPLICATION_SIGNS", "Ear discharge, mouth ulcers, or unable to feed?", YES_NO),
     question("C7", "MEASLES_VACCINE", "Measles vaccine?", YES_NO_UNKNOWN, { visibleForAgeBands: UNDER_15_BANDS }),
   ],

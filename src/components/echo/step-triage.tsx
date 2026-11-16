@@ -216,7 +216,8 @@ export function StepTriage({
 
 
   useEffect(() => {
-    void runEvaluation();
+    const timeoutId = window.setTimeout(() => void runEvaluation(), 0);
+    return () => window.clearTimeout(timeoutId);
   }, [runEvaluation]);
 
   if (loading) {
@@ -244,6 +245,7 @@ export function StepTriage({
         conditionLabel={outcome.condition_label_en || "Clinical Assessment"}
         guidanceText={outcome.guidance_en || ""}
         ipcGuidance={outcome.ipc_guidance_en}
+        referralRequired={outcome.referral_required}
         onConfirmReferral={() => handleProceed(true)}
         onCompleteRoutine={() => handleProceed(false)}
       />

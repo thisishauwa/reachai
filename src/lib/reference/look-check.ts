@@ -149,7 +149,7 @@ export interface EmergencyQuestion {
 }
 
 export interface EmergencyVariant {
-  id: "collapse" | "bleeding" | "jaundice" | "unwell" | "pending";
+  id: "collapse" | "bleeding" | "jaundice" | "neurologic" | "breathing" | "newborn" | "unwell";
   title: string;
   ipc: string;
   questions: EmergencyQuestion[];
@@ -189,6 +189,19 @@ export function emergencyVariantForSign(code: string): EmergencyVariant {
       ],
     };
   }
+  if (code === "L1" || code === "L2") {
+    return {
+      id: "neurologic",
+      title: code === "L1" ? "Fit or convulsion danger sign" : "Confusion or reduced consciousness",
+      ipc: "IPC instructions pending PharmAccess.",
+      questions: [
+        q("E9", "Is there fever?"),
+        q("E10", "Can the patient put their chin to their chest, or is the neck stiff or painful?"),
+        q("E11", "Are there purple or dark spots that stay when pressed?"),
+        q("E12", "For an infant under 1: is the soft spot on the head bulging?", true),
+      ],
+    };
+  }
   if (code === "L4") {
     return {
       id: "collapse",
@@ -199,6 +212,32 @@ export function emergencyVariantForSign(code: string): EmergencyVariant {
         q("E14", "Is the stool like rice water?"),
         q("E15", "Is there fever?"),
         q("E16", "Has the patient passed urine in the last 6 hours?"),
+      ],
+    };
+  }
+  if (code === "L6") {
+    return {
+      id: "breathing",
+      title: "Fast breathing or chest pulling in",
+      ipc: "IPC instructions pending PharmAccess.",
+      questions: [
+        q("E17", "Is there fever?"),
+        q("E18", "Is there a rash?"),
+        q("E19", "Has the patient had a cough for 2 weeks or more?"),
+        q("E20", "Is there a grey coating in the throat or swelling of the neck?"),
+      ],
+    };
+  }
+  if (code === "L7") {
+    return {
+      id: "newborn",
+      title: "Newborn danger sign",
+      ipc: "IPC instructions pending PharmAccess.",
+      questions: [
+        q("E21", "Was the cord cut with a clean blade?", true),
+        q("E22", "Does the baby have stiffness or spasms?"),
+        q("E23", "Does the baby have a fever?"),
+        q("E24", "Has the baby fed at all since birth?", true),
       ],
     };
   }
@@ -214,14 +253,7 @@ export function emergencyVariantForSign(code: string): EmergencyVariant {
       ],
     };
   }
-  return {
-    id: "pending",
-    title: "Acute danger sign",
-    ipc: "IPC instructions pending PharmAccess.",
-    questions: [
-      q(`${code}_DETAIL_1`, "Did this danger sign start suddenly?"),
-      q(`${code}_DETAIL_2`, "Is the danger sign present now?"),
-      q(`${code}_DETAIL_3`, "Has the patient's condition become worse today?"),
-    ],
-  };
+  // All valid look-check codes are handled above. Keep an L8-safe fallback so
+  // malformed persisted data never invents an unapproved question set.
+  return emergencyVariantForSign("L8");
 }

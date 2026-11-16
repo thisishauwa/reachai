@@ -50,13 +50,34 @@ export function StepLookCheck({ presence, ageBand, onContinue, onPrevious }: Ste
   const primarySignCode = highestPrioritySign(dangerCodes);
   const hasUnknown = Object.values(answers).includes("unknown");
 
-  const toggle = (code: string) => {
-    setChecked((current) => {
-      const next = new Set(current);
-      if (next.has(code)) next.delete(code);
-      else next.add(code);
-      return next;
+  const routeToAcute = (selectedSignCodes: string[], nextAnswers = answers) => {
+    const nextPrimarySignCode = highestPrioritySign(selectedSignCodes);
+    if (!nextPrimarySignCode) return;
+
+    onContinue({
+      selectedSignCodes,
+      primarySignCode: nextPrimarySignCode,
+      syndromeId: syndromeForLookCheckSign(nextPrimarySignCode),
+      syndromeLabel: labelForLookCheckSign(nextPrimarySignCode),
+      caregiverReported: !isPresent,
+      hasUnknown: Object.values(nextAnswers).includes("unknown"),
+      answers: nextAnswers,
     });
+  };
+
+  const selectPresentDangerSign = (code: string) => {
+    // The walkthrough requires the refer-now screen to replace the look-check
+    // as soon as a visible sign is ticked. There is deliberately no second
+    // "Continue — acute" tap on this path.
+    setChecked(new Set([code]));
+    routeToAcute([code]);
+  };
+
+  const answerCaregiverQuestion = (code: string, value: LookCheckAnswer) => {
+    const nextAnswers = { ...answers, [code]: value };
+    setAnswers(nextAnswers);
+    const nextDangerCodes = dangerSignsFromCaregiverAnswers(nextAnswers);
+    if (nextDangerCodes.length > 0) routeToAcute(nextDangerCodes, nextAnswers);
   };
 
   const handleContinue = () => {
@@ -100,7 +121,7 @@ export function StepLookCheck({ presence, ageBand, onContinue, onPrevious }: Ste
                     type="button"
                     id={`look-check-${sign.code.toLowerCase()}`}
                     aria-pressed={selected}
-                    onClick={() => toggle(sign.code)}
+                    onClick={() => selectPresentDangerSign(sign.code)}
                     className={cn(
                       "min-h-11 w-full rounded-[14px] px-4 py-3.5 flex items-center justify-between gap-3 text-left border transition-all",
                       selected
@@ -140,7 +161,7 @@ export function StepLookCheck({ presence, ageBand, onContinue, onPrevious }: Ste
                           <button
                             key={option.value}
                             type="button"
-                            onClick={() => setAnswers((current) => ({ ...current, [question.code]: option.value }))}
+                            onClick={() => answerCaregiverQuestion(question.code, option.value)}
                             className={cn(
                               "min-h-11 rounded-[12px] border px-2 py-2 text-xs sm:text-sm font-medium flex flex-col items-center justify-center",
                               selected ? "bg-[#0073f3] border-[#0073f3] text-white" : "bg-white border-[#d8e0e7] text-[#242b33]",
@@ -178,7 +199,7 @@ export function StepLookCheck({ presence, ageBand, onContinue, onPrevious }: Ste
           aria-disabled={unanswered}
           className={cn("min-h-11 rounded-[12px] bg-[#0073f3] px-5 sm:px-8 text-sm sm:text-base font-medium text-white shadow-sm", unanswered && "opacity-50 cursor-not-allowed")}
         >
-          {primarySignCode ? "Continue — acute" : isPresent ? "None of these — continue" : "Continue"}
+          {isPresent ? "None of these — continue" : primarySignCode ? "Continue — acute" : "Continue"}
         </button>
       </div>
     </div>

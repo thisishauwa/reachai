@@ -19,6 +19,7 @@ interface TriageBottomSheetProps {
   conditionLabel: string;
   guidanceText: string;
   ipcGuidance?: string | null;
+  referralRequired: boolean;
   onConfirmReferral: () => void;
   onClose?: () => void;
   onCompleteRoutine?: () => void;
@@ -29,13 +30,13 @@ export function TriageBottomSheet({
   conditionLabel,
   guidanceText,
   ipcGuidance,
+  referralRequired,
   onConfirmReferral,
   onClose,
   onCompleteRoutine,
 }: TriageBottomSheetProps) {
   const isEmergency = severity === "emergency";
   const isUrgent = severity === "urgent";
-  const isRoutine = severity === "routine" || severity === "none";
 
   // AC6 — No syndrome match edge case
   const hasMatch =
@@ -85,7 +86,7 @@ export function TriageBottomSheet({
                 : "bg-[#f1f5f9] text-[#475569]"
             )}
           >
-            {isEmergency ? "Emergency" : isUrgent ? "Urgent" : "Routine"}
+            {isEmergency ? "Acute" : isUrgent ? "Urgent" : "Routine"}
           </span>
         </div>
 
@@ -151,7 +152,7 @@ export function TriageBottomSheet({
 
       {/* Bottom Action Button */}
       <div className="pt-2">
-        {!isRoutine ? (
+        {referralRequired ? (
           <button
             type="button"
             id="confirm-referral-btn"
@@ -160,7 +161,9 @@ export function TriageBottomSheet({
               "w-full inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-[12px] text-sm sm:text-base font-medium transition-colors cursor-pointer",
               isEmergency
                 ? "bg-[#e05338] hover:bg-[#c9432a] text-white"
-                : "bg-[#f59e0b] hover:bg-[#d97706] text-white"
+                : isUrgent
+                  ? "bg-[#f59e0b] hover:bg-[#d97706] text-white"
+                  : "bg-[#0073f3] hover:bg-[#0060cb] text-white"
             )}
           >
             <span>Confirm Referral</span>

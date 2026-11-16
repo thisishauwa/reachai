@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { StepLookCheck } from "../step-look-check";
 
 describe("StepLookCheck", () => {
-  it("changes the present-patient action to acute when L8 is selected", () => {
+  it("opens the refer-now branch immediately when a present-patient sign is selected", () => {
     const onContinue = vi.fn();
     render(
       <StepLookCheck
@@ -16,11 +16,11 @@ describe("StepLookCheck", () => {
     expect(screen.queryByText(/Baby under 28 days/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^None of these — continue$/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /L8.*very unwell/i }));
-    fireEvent.click(screen.getByRole("button", { name: /Continue — acute/i }));
 
     expect(onContinue).toHaveBeenCalledWith(
       expect.objectContaining({ primarySignCode: "L8", syndromeId: "LOOK_CHECK_UNWELL" }),
     );
+    expect(onContinue).toHaveBeenCalledTimes(1);
   });
 
   it("shows the newborn sign only for under 28 days", () => {
@@ -39,15 +39,13 @@ describe("StepLookCheck", () => {
       <StepLookCheck presence="at_home" ageBand="18_to_49" onContinue={onContinue} />,
     );
 
-    const groups = screen.getAllByRole("group");
-    for (const group of groups) {
-      fireEvent.click(within(group).getByRole("button", { name: /^No/ }));
-    }
-    fireEvent.click(screen.getByRole("button", { name: /Continue — acute/i }));
+    const abilityGroup = screen.getByRole("group", { name: /able to stand and drink/i });
+    fireEvent.click(within(abilityGroup).getByRole("button", { name: /^No/ }));
 
     expect(onContinue).toHaveBeenCalledWith(
       expect.objectContaining({ primarySignCode: "L4", caregiverReported: true }),
     );
+    expect(onContinue).toHaveBeenCalledTimes(1);
   });
 
   it("matches Journey 6: an absent patient's Don't know answer blocks Routine without inventing a danger sign", () => {

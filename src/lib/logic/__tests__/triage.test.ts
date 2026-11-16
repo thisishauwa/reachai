@@ -65,6 +65,30 @@ describe("evaluateClinicalTriage", () => {
     expect(outcome.conditionLabelEn).not.toContain("Suspected");
   });
 
+  it("matches Journey 1: L5 plus E1 classifies the already-referred case as a yellow-fever pattern", () => {
+    const outcome = evaluateClinicalTriage("LOOK_CHECK_JAUNDICE", {
+      E1: "yes",
+      E2: "yes",
+      E3: "no",
+      E4: "unknown",
+    });
+    expect(outcome.severity).toBe("emergency");
+    expect(outcome.referralRequired).toBe(true);
+    expect(outcome.conditionCode).toBe("YELLOW_FEVER_EMERGENCY_PATTERN");
+  });
+
+  it("matches Journey 2: L3 with E5, E6 and E7 classifies the already-referred case as a Lassa/VHF pattern", () => {
+    const outcome = evaluateClinicalTriage("LOOK_CHECK_BLEEDING", {
+      E5: "yes",
+      E6: "yes",
+      E7: "yes",
+      E8: "unknown",
+    });
+    expect(outcome.severity).toBe("emergency");
+    expect(outcome.referralRequired).toBe(true);
+    expect(outcome.conditionCode).toBe("LASSA_VHF_EMERGENCY_PATTERN");
+  });
+
   it("triggers emergency referral when AWD symptoms are yes and yes (dire dehydration)", () => {
     const outcome = evaluateClinicalTriage("ACUTE_WATERY_DIARRHOEA", {
       AWD_DEHYDRATION: "yes",
@@ -110,6 +134,18 @@ describe("evaluateClinicalTriage", () => {
     });
     expect(outcome.referralRequired).toBe(true);
     expect(outcome.severity).toBe("urgent");
+  });
+
+  it("matches Journey 6: caregiver uncertainty is Urgent and unclassified", () => {
+    const outcome = evaluateClinicalTriage("OTHER_PRIORITY", {
+      LOOK_CHECK_UNKNOWN: "yes",
+      CAREGIVER_REPORTED: true,
+      FEVER_DURATION: "3_6_days",
+      NECK_FLEXION: "unknown",
+    });
+    expect(outcome.severity).toBe("urgent");
+    expect(outcome.referralRequired).toBe(true);
+    expect(outcome.conditionCode).toBe("CAREGIVER_REPORTED_UNCERTAINTY");
   });
 
   it("escalates to emergency when symptom severity is rated severe", () => {
@@ -192,6 +228,95 @@ describe("evaluateMultiSyndromeTriage", () => {
     expect(outcome.referralRequired).toBe(false);
     expect(outcome.conditionCode).toBe("ROUTINE_CARE");
   });
+
+  it("matches Journey 3: uncomplicated short fever is Routine and not referred", () => {
+    const outcome = evaluateMultiSyndromeTriage([], {
+      COMPLAINT_AREA: "A",
+      FEVER_DURATION: "1_2_days",
+      NECK_FLEXION: "yes_easily",
+      RASH_PRESENT: "no",
+      MALARIA_MEDICINE_NO_IMPROVEMENT: "no",
+      LASSA_EXPOSURE: "no",
+      YELLOW_FEVER_EXPOSURE: "no",
+      DIARRHOEA_OR_VOMITING: "no",
+      COUGH_PRESENT: "no",
+    }, ["COMPLAINT_A"]);
+    expect(outcome.severity).toBe("routine");
+    expect(outcome.referralRequired).toBe(false);
+  });
+
+  it("matches Journeys 4 and 5: the same measles pattern is Urgent, then Acute in pregnancy", () => {
+    const answers = {
+      COMPLAINT_AREA: "C",
+      FEVER_PRESENT: "yes",
+      RASH_START_LOCATION: "face_or_behind_ears",
+      MEASLES_EYE_COUGH_SIGNS: "yes",
+      BLISTERS_SAME_STAGE: "no",
+      RASH_CONTACT: "unknown",
+      RASH_COMPLICATION_SIGNS: "no",
+    };
+    const urgent = evaluateMultiSyndromeTriage([], { ...answers, PREGNANCY_STATUS: "not_pregnant" }, ["COMPLAINT_C"]);
+    const acute = evaluateMultiSyndromeTriage([], { ...answers, PREGNANCY_STATUS: "pregnant" }, ["COMPLAINT_C"]);
+    expect(urgent.severity).toBe("urgent");
+    expect(acute.severity).toBe("emergency");
+    expect(urgent.referralRequired).toBe(true);
+    expect(acute.referralRequired).toBe(true);
+  });
+
+  it("matches Journey 7: the fever-to-diarrhoea bridge produces an Urgent cholera referral", () => {
+    const outcome = evaluateMultiSyndromeTriage([], {
+      COMPLAINT_AREA: "A",
+      FEVER_DURATION: "1_2_days",
+      DIARRHOEA_OR_VOMITING: "yes",
+      WATERY_STOOL_COUNT: "6_10",
+      BLOOD_OR_MUCUS_STOOL: "no",
+      RICE_WATER_STOOL: "yes",
+      DEHYDRATION_SIGNS: ["very_thirsty"],
+    }, ["COMPLAINT_A"]);
+    expect(outcome.severity).toBe("urgent");
+    expect(outcome.referralRequired).toBe(true);
+    expect(outcome.conditionCode).toContain("CHOLERA_PATTERN");
+  });
+
+  it("matches Journeys 8 and 12: a TB pattern stays Routine but still requires referral", () => {
+    const outcome = evaluateMultiSyndromeTriage([], {
+      COMPLAINT_AREA: "E",
+      COUGH_DURATION: "2_plus_weeks",
+      BLOOD_IN_SPUTUM: "no",
+      WEIGHT_LOSS_OR_NIGHT_SWEATS: "yes",
+      DIPHTHERIA_SIGNS: "no",
+    }, ["COMPLAINT_E"]);
+    expect(outcome.severity).toBe("routine");
+    expect(outcome.referralRequired).toBe(true);
+    expect(outcome.conditionCode).toContain("TB_SCREENING_PATTERN");
+  });
+
+  it("matches Journey 9: sudden weak limb under 15 produces an Urgent AFP referral", () => {
+    const outcome = evaluateMultiSyndromeTriage([], {
+      COMPLAINT_AREA: "F",
+      WEAK_LIMB: "yes",
+      ANIMAL_BITE: "no",
+      FEVER_PRESENT: "no",
+    }, ["COMPLAINT_F"]);
+    expect(outcome.severity).toBe("urgent");
+    expect(outcome.referralRequired).toBe(true);
+    expect(outcome.conditionCode).toContain("AFP_PATTERN");
+  });
+
+  it("matches Journey 10: severe cholera outranks typhoid while retaining both category tags", () => {
+    const outcome = evaluateMultiSyndromeTriage([], {
+      COMPLAINT_AREA: "A",
+      FEVER_DURATION: "3_6_days",
+      DIARRHOEA_OR_VOMITING: "yes",
+      WATERY_STOOL_COUNT: "6_10",
+      BLOOD_OR_MUCUS_STOOL: "no",
+      RICE_WATER_STOOL: "yes",
+      DEHYDRATION_SIGNS: ["sunken_eyes", "very_thirsty"],
+    }, ["COMPLAINT_A"]);
+    expect(outcome.severity).toBe("emergency");
+    expect(outcome.conditionCode).toContain("CHOLERA_PATTERN");
+    expect(outcome.conditionCode).toContain("TYPHOID_PATTERN");
+  });
 });
 
 describe("getFollowUpQuestions (Hardcoded Symptom Questions)", () => {
@@ -223,5 +348,3 @@ describe("getFollowUpQuestions (Hardcoded Symptom Questions)", () => {
     expect(questions).toEqual([]);
   });
 });
-
-

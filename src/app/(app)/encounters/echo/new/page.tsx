@@ -277,7 +277,7 @@ export default function NewEchoEncounterPage() {
     const nextStep: EchoStep =
       state.primaryDangerSignCode === "L8" && state.complaintArea
         ? "complaint_questions"
-        : state.dangerSignCodes.length > 0 || state.lookCheckUncertain
+        : state.dangerSignCodes.length > 0
         ? "triage"
         : "complaint";
 
@@ -293,6 +293,7 @@ export default function NewEchoEncounterPage() {
           ...s.answers,
           PATIENT_RELATIONSHIP: data.relationship,
           CONSENTED_BY: data.consentedBy,
+          PREGNANCY_STATUS: data.pregnancyStatus,
         },
         step: nextStep,
       }));
@@ -468,6 +469,7 @@ export default function NewEchoEncounterPage() {
         ...s.answers,
         PATIENT_RELATIONSHIP: data.relationship,
         CONSENTED_BY: data.consentedBy,
+        PREGNANCY_STATUS: data.pregnancyStatus,
       },
       sessionCode: state.privacyMode === "anonymous" ? sessionCode : null,
       consentId,
@@ -679,6 +681,7 @@ export default function NewEchoEncounterPage() {
           area={state.complaintArea}
           ageBand={state.ageBand}
           encounterId={state.encounterId}
+          caregiverReported={state.caregiverReported}
           initialAnswers={state.complaintAnswers}
           onPrevious={() => setState((s) => ({ ...s, step: "complaint" }))}
           onComplete={(questionSetId, complaintAnswers) =>
