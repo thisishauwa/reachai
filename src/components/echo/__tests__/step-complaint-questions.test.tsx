@@ -5,39 +5,59 @@ import { StepComplaintQuestions } from "../step-complaint-questions";
 vi.mock("@/lib/session/session-context", () => ({ useSession: () => ({ userId: "user-1" }) }));
 vi.mock("@/lib/offline/sync", () => ({ syncController: { enqueue: vi.fn().mockResolvedValue(undefined) } }));
 
+function answer(id: string, option: RegExp) {
+  const label = screen.getByText(id);
+  const group = label.closest("fieldset");
+  if (!group) throw new Error(`Question ${id} not found`);
+  fireEvent.click(within(group).getByRole("button", { name: option }));
+}
+
+function completeSetABase(a7: "yes" | "no" = "no", a8: "yes" | "no" = "no") {
+  answer("A1", /^1 to 2/);
+  answer("A2", /^Yes, easily/);
+  answer("A3", /^No/);
+  answer("A4", /^No/);
+  answer("A5", /^No/);
+  answer("A6", /^No/);
+  answer("A7", a7 === "yes" ? /^Yes/ : /^No/);
+  answer("A8", a8 === "yes" ? /^Yes/ : /^No/);
+}
+
 describe("StepComplaintQuestions", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("completes all-negative set A without showing a bridge", () => {
-    render(<StepComplaintQuestions area="A" encounterId="encounter-1" onComplete={vi.fn()} />);
-    screen.getAllByRole("group").forEach((group) =>
-      fireEvent.click(within(group).getByRole("button", { name: /^No/ })),
-    );
-    expect(screen.queryByText(/Because A7 was Yes/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Because A8 was Yes/)).not.toBeInTheDocument();
+  it("matches Journey 3: short fever, all negative, no bridge", () => {
+    render(<StepComplaintQuestions area="A" ageBand="18_to_49" encounterId="encounter-1" onComplete={vi.fn()} />);
+    completeSetABase();
+    expect(screen.queryByText(/Shown because A7 is Yes/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Shown because A8 is Yes/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Continue to result/ })).toBeEnabled();
   });
 
-  it("shows the grey B1-B4 bridge when A7 is Yes and disables Continue while bridge answers are missing", () => {
-    render(<StepComplaintQuestions area="A" encounterId="encounter-1" onComplete={vi.fn()} />);
-    const baseGroups = screen.getAllByRole("group");
-    baseGroups.forEach((group) => {
-      const isA7 = within(group).queryByText("A7");
-      fireEvent.click(within(group).getByRole("button", { name: isA7 ? /^Yes/ : /^No/ }));
-    });
-
-    expect(screen.getByText("Because A7 was Yes")).toBeInTheDocument();
+  it("matches Journey 7: A7 reveals B1-B4 in the grey bridge and keeps Continue disabled", () => {
+    render(<StepComplaintQuestions area="A" ageBand="18_to_49" encounterId="encounter-1" onComplete={vi.fn()} />);
+    completeSetABase("yes");
+    expect(screen.getByText("Shown because A7 is Yes")).toBeInTheDocument();
     expect(screen.getByText("B1")).toBeInTheDocument();
     expect(screen.getByText("B4")).toBeInTheDocument();
-    expect(screen.getAllByText(/Required — choose Yes/)).toHaveLength(4);
+    expect(screen.getAllByText("Required — choose an answer.")).toHaveLength(4);
     expect(screen.getByRole("button", { name: /Continue to result/ })).toBeDisabled();
   });
 
-  it("renders only set F and starts with the weak-limb question", () => {
-    render(<StepComplaintQuestions area="F" encounterId="encounter-1" onComplete={vi.fn()} />);
-    expect(screen.getAllByRole("group")).toHaveLength(5);
+  it("matches Journeys 8 and 12: set E uses cough duration and weight-loss questions", () => {
+    render(<StepComplaintQuestions area="E" ageBand="under_5" encounterId="encounter-1" onComplete={vi.fn()} />);
+    expect(screen.getByText("cough E1")).toBeInTheDocument();
+    expect(screen.getAllByText(/How long has the cough lasted/)).toHaveLength(2);
+    expect(screen.getByRole("button", { name: /^2 weeks or more/ })).toBeInTheDocument();
+    expect(screen.getAllByText(/Weight loss or night sweats/)).toHaveLength(2);
+  });
+
+  it("matches Journey 9: an 11-year-old sees F1 weak limb but not the newborn F3", () => {
+    render(<StepComplaintQuestions area="F" ageBand="5_to_17" encounterId="encounter-1" onComplete={vi.fn()} />);
+    expect(screen.getAllByRole("group")).toHaveLength(4);
     expect(screen.getByText("F1")).toBeInTheDocument();
-    expect(screen.getAllByText(/arm or leg suddenly become weak or floppy/i)).toHaveLength(2);
+    expect(screen.getAllByText(/Sudden weakness or floppy arm or leg/)).toHaveLength(2);
+    expect(screen.queryByText("F3")).not.toBeInTheDocument();
     expect(screen.queryByText("A1")).not.toBeInTheDocument();
   });
 });

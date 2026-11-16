@@ -12,20 +12,19 @@ interface StepEmergencyProps {
   onPrevious?: () => void;
 }
 
-const OPTIONS: { value: LookCheckAnswer; label: string; ha: string }[] = [
+const YES_NO_OPTIONS: { value: LookCheckAnswer; label: string; ha: string }[] = [
   { value: "yes", label: "Yes", ha: "I" },
   { value: "no", label: "No", ha: "A'a" },
-  { value: "unknown", label: "Don't know", ha: "Ban sani ba" },
 ];
+const UNKNOWN_OPTION: { value: LookCheckAnswer; label: string; ha: string } = { value: "unknown", label: "Don't know", ha: "Ban sani ba" };
 
 export function StepEmergency({ primarySignCode, caregiverReported, onComplete, onPrevious }: StepEmergencyProps) {
   const variant = useMemo(() => emergencyVariantForSign(primarySignCode), [primarySignCode]);
   const [answers, setAnswers] = useState<Record<string, LookCheckAnswer>>({});
-  const [submitted, setSubmitted] = useState(false);
+  const hasStarted = Object.keys(answers).length > 0;
   const allAnswered = variant.questions.every((question) => answers[question.code]);
 
   const handleContinue = () => {
-    setSubmitted(true);
     if (!allAnswered) return;
     onComplete(`look_check_${variant.id}`, {
       ...answers,
@@ -40,8 +39,8 @@ export function StepEmergency({ primarySignCode, caregiverReported, onComplete, 
       <section className="rounded-[20px] border border-[#f2c8bd] bg-[#fff5f2] p-5 sm:p-8 flex gap-4" role="alert">
         <div className="size-11 rounded-full bg-[#d44424] text-white flex items-center justify-center shrink-0"><AlertTriangle className="size-6" /></div>
         <div>
-          <p className="text-xs font-bold uppercase tracking-wider text-[#b5351c]">Refer now · Acute</p>
-          <h2 className="text-xl sm:text-2xl font-semibold text-[#5b1c10] mt-1">Arrange transport to the clinic now</h2>
+          <p className="text-xs font-bold uppercase tracking-wider text-[#b5351c]">Acute</p>
+          <h2 className="text-xl sm:text-2xl font-semibold text-[#5b1c10] mt-1">Refer now — do not delay</h2>
           <p className="text-sm sm:text-base text-[#7a3426] mt-2">
             {caregiverReported ? "Tell the caregiver to bring the patient to the clinic immediately." : "Keep the patient with you while transport is arranged."}
           </p>
@@ -75,15 +74,17 @@ export function StepEmergency({ primarySignCode, caregiverReported, onComplete, 
           <h3 className="text-lg sm:text-xl font-semibold text-[#001f3e] mt-1">{variant.title}: classifying questions</h3>
           <p className="text-sm text-[#6e8298] mt-1">These questions support the referral. They do not diagnose the patient.</p>
         </div>
-        {variant.questions.map((question, index) => {
-          const missing = submitted && !answers[question.code];
+        {variant.questions.map((question) => {
+          const missing = hasStarted && !answers[question.code];
+          const options = caregiverReported || question.allowUnknown ? [...YES_NO_OPTIONS, UNKNOWN_OPTION] : YES_NO_OPTIONS;
           return (
             <fieldset key={question.code} className={cn("rounded-[16px] bg-white border p-4 sm:p-5 flex flex-col gap-3", missing ? "border-[#d44424]" : "border-[#e4e8ec]") }>
               <legend className="sr-only">{question.prompt_en}</legend>
-              <p className="text-sm sm:text-base font-medium text-[#242b33]">{index + 1}. {question.prompt_en}</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-[#0590f9]">{question.code}</p>
+              <p className="text-sm sm:text-base font-medium text-[#242b33]">{question.prompt_en}</p>
               <p className="text-xs text-[#6e8298]">{question.prompt_ha}</p>
               <div className="grid grid-cols-3 gap-2">
-                {OPTIONS.map((option) => {
+                {options.map((option) => {
                   const selected = answers[question.code] === option.value;
                   return (
                     <button key={option.value} type="button" onClick={() => setAnswers((current) => ({ ...current, [question.code]: option.value }))} className={cn("min-h-11 rounded-[12px] border px-2 py-2 text-xs sm:text-sm font-medium flex flex-col items-center justify-center", selected ? "bg-[#0073f3] border-[#0073f3] text-white" : "bg-white border-[#d8e0e7] text-[#242b33]") }>

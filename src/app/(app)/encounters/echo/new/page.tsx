@@ -45,11 +45,14 @@ import type {
   ComplaintAnswer,
   ComplaintAreaCode,
 } from "@/lib/reference/complaint-questions";
+import { complaintAreaForL8Answers } from "@/lib/reference/look-check";
 
 // Flow order per spec v0.3 / walkthrough v0.4 (AIR-794):
-// request → presence + age → look-check → details + consent
-//   ├── (if danger signs) → refer-now + classifying questions → triage → referral → complete
-//   └── (if no danger signs) → complaint area → A-F question set → triage/result
+// request → presence + age → look-check
+//   ├── (danger sign) → refer-now + classifying questions → details + consent → triage
+//   └── (no danger sign) → details + consent → complaint area → A-F set → triage/result
+// L8 is the exception: E25-E27 can open the matching A-C set after consent while
+// the severity remains Acute.
 //
 // Request logging and presence/age are surveillance-only and never route
 // anything — the look-check decision (syndrome step) is unaffected by them.
@@ -272,7 +275,9 @@ export default function NewEchoEncounterPage() {
   // ── Step 4: Details + consent complete ──────────────────────────────────
   async function handleDemographicsComplete(data: DetailsConsentResult) {
     const nextStep: EchoStep =
-      state.dangerSignCodes.length > 0 || state.lookCheckUncertain
+      state.primaryDangerSignCode === "L8" && state.complaintArea
+        ? "complaint_questions"
+        : state.dangerSignCodes.length > 0 || state.lookCheckUncertain
         ? "triage"
         : "complaint";
 
@@ -622,6 +627,10 @@ export default function NewEchoEncounterPage() {
               ...s,
               questionSetId,
               answers: { ...s.answers, ...emergencyAnswers },
+              complaintArea:
+                s.primaryDangerSignCode === "L8"
+                  ? complaintAreaForL8Answers(emergencyAnswers)
+                  : s.complaintArea,
               step: "consent",
             }))
           }
@@ -668,6 +677,7 @@ export default function NewEchoEncounterPage() {
       {state.step === "complaint_questions" && state.encounterId && state.complaintArea && (
         <StepComplaintQuestions
           area={state.complaintArea}
+          ageBand={state.ageBand}
           encounterId={state.encounterId}
           initialAnswers={state.complaintAnswers}
           onPrevious={() => setState((s) => ({ ...s, step: "complaint" }))}

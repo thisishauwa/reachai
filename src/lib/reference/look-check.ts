@@ -9,14 +9,14 @@ export interface LookCheckSign {
 }
 
 export const LOOK_CHECK_SIGNS: LookCheckSign[] = [
-  { code: "L1", label_en: "Collapsed, unconscious, or very difficult to wake", label_ha: "[Hausa pending]" },
-  { code: "L2", label_en: "Struggling to breathe or breathing abnormally", label_ha: "[Hausa pending]" },
-  { code: "L3", label_en: "Bleeding from the nose, mouth, skin, vomit, or stool", label_ha: "[Hausa pending]" },
-  { code: "L4", label_en: "Cannot stand, sit upright, or drink", label_ha: "[Hausa pending]" },
-  { code: "L5", label_en: "Eyes or skin look yellow", label_ha: "[Hausa pending]" },
-  { code: "L6", label_en: "Having fits or convulsions now", label_ha: "[Hausa pending]" },
-  { code: "L7", label_en: "Newborn looks ill, is not feeding, or feels very hot or cold", label_ha: "[Hausa pending]", newbornOnly: true },
-  { code: "L8", label_en: "Looks very unwell to me", label_ha: "[Hausa pending]" },
+  { code: "L1", label_en: "Fitting now, or had a fit before coming", label_ha: "[Hausa pending]" },
+  { code: "L2", label_en: "Confused, very sleepy, or hard to wake", label_ha: "[Hausa pending]" },
+  { code: "L3", label_en: "Bleeding from gums, nose, vomit, stool, urine, or unexplained bruising", label_ha: "[Hausa pending]" },
+  { code: "L4", label_en: "Cannot stand, cannot drink, or had to be carried", label_ha: "[Hausa pending]" },
+  { code: "L5", label_en: "Yellow eyes or yellow skin", label_ha: "[Hausa pending]" },
+  { code: "L6", label_en: "Breathing very fast, or chest pulling in", label_ha: "[Hausa pending]" },
+  { code: "L7", label_en: "Baby under 28 days: not feeding, stiff, or having spasms", label_ha: "[Hausa pending]", newbornOnly: true },
+  { code: "L8", label_en: "None of these, but this person looks very unwell to me", label_ha: "[Hausa pending]" },
 ];
 
 export interface CaregiverQuestion {
@@ -32,42 +32,42 @@ export const CAREGIVER_QUESTIONS: CaregiverQuestion[] = [
   {
     code: "L1_L2",
     signCodes: ["L1", "L2"],
-    prompt_en: "Has the patient collapsed, become very difficult to wake, or started struggling to breathe?",
+    prompt_en: "Is the patient confused, very sleepy, or have they had a fit?",
     prompt_ha: "[Hausa pending]",
     dangerAnswer: "yes",
   },
   {
     code: "L3",
     signCodes: ["L3"],
-    prompt_en: "Is the patient bleeding from the nose, mouth, skin, vomit, or stool?",
+    prompt_en: "Have you seen any bleeding, or unexplained bruising?",
     prompt_ha: "[Hausa pending]",
     dangerAnswer: "yes",
   },
   {
     code: "L4",
     signCodes: ["L4"],
-    prompt_en: "Can the patient stand or sit upright and drink?",
+    prompt_en: "Is the patient able to stand and drink by themselves?",
     prompt_ha: "[Hausa pending]",
     dangerAnswer: "no",
   },
   {
     code: "L5",
     signCodes: ["L5"],
-    prompt_en: "Do the patient's eyes or skin look yellow?",
+    prompt_en: "Are the patient's eyes or skin yellow?",
     prompt_ha: "[Hausa pending]",
     dangerAnswer: "yes",
   },
   {
     code: "L6",
     signCodes: ["L6"],
-    prompt_en: "Has the patient had a fit or convulsion during this illness?",
+    prompt_en: "Is the patient breathing very fast?",
     prompt_ha: "[Hausa pending]",
     dangerAnswer: "yes",
   },
   {
     code: "L7",
     signCodes: ["L7"],
-    prompt_en: "Is the newborn not feeding, very hot or cold, or unusually sleepy?",
+    prompt_en: "Baby under 28 days: are they feeding, and is their body stiff?",
     prompt_ha: "[Hausa pending]",
     dangerAnswer: "yes",
     newbornOnly: true,
@@ -82,12 +82,22 @@ export function isNewbornAgeBand(ageBand: string): boolean {
 
 export function visibleLookCheckSigns(ageBand: string): LookCheckSign[] {
   const newborn = isNewbornAgeBand(ageBand);
-  return LOOK_CHECK_SIGNS.filter((sign) => !sign.newbornOnly || newborn);
+  const underFive = ["under_28_days", "under_1_year", "under_5", "0_28_days", "1_11_months", "1_4_years"].includes(ageBand);
+  return LOOK_CHECK_SIGNS.filter((sign) => !sign.newbornOnly || newborn).map((sign) =>
+    sign.code === "L4" && underFive
+      ? { ...sign, label_en: "Cannot drink or breastfeed, or had to be carried" }
+      : sign,
+  );
 }
 
 export function visibleCaregiverQuestions(ageBand: string): CaregiverQuestion[] {
   const newborn = isNewbornAgeBand(ageBand);
-  return CAREGIVER_QUESTIONS.filter((question) => !question.newbornOnly || newborn);
+  const underFive = ["under_28_days", "under_1_year", "under_5", "0_28_days", "1_11_months", "1_4_years"].includes(ageBand);
+  return CAREGIVER_QUESTIONS.filter((question) => !question.newbornOnly || newborn).map((question) =>
+    question.code === "L4" && underFive
+      ? { ...question, prompt_en: "Is the patient able to drink or breastfeed?" }
+      : question,
+  );
 }
 
 export function highestPrioritySign(codes: Iterable<string>): string | null {
@@ -107,10 +117,13 @@ export function dangerSignsFromCaregiverAnswers(
 
 export function syndromeForLookCheckSign(code: string): string {
   const variants: Record<string, string> = {
-    L1: "LOOK_CHECK_COLLAPSE",
-    L2: "LOOK_CHECK_COLLAPSE",
+    L1: "LOOK_CHECK_FIT",
+    L2: "LOOK_CHECK_CONFUSION",
     L3: "LOOK_CHECK_BLEEDING",
+    L4: "LOOK_CHECK_COLLAPSE",
     L5: "LOOK_CHECK_JAUNDICE",
+    L6: "LOOK_CHECK_BREATHING",
+    L7: "LOOK_CHECK_NEWBORN",
     L8: "LOOK_CHECK_UNWELL",
   };
   return variants[code] ?? `LOOK_CHECK_${code}`;
@@ -120,10 +133,19 @@ export function labelForLookCheckSign(code: string): string {
   return LOOK_CHECK_SIGNS.find((sign) => sign.code === code)?.label_en ?? "Acute danger sign";
 }
 
+/** L8 stays Acute, but a positive E25-E27 answer opens the matching normal set. */
+export function complaintAreaForL8Answers(answers: Record<string, unknown>): "A" | "B" | "C" | null {
+  if (answers.E25 === "yes") return "A";
+  if (answers.E26 === "yes") return "B";
+  if (answers.E27 === "yes") return "C";
+  return null;
+}
+
 export interface EmergencyQuestion {
   code: string;
   prompt_en: string;
   prompt_ha: string;
+  allowUnknown?: boolean;
 }
 
 export interface EmergencyVariant {
@@ -133,10 +155,11 @@ export interface EmergencyVariant {
   questions: EmergencyQuestion[];
 }
 
-const q = (code: string, prompt_en: string): EmergencyQuestion => ({
+const q = (code: string, prompt_en: string, allowUnknown = false): EmergencyQuestion => ({
   code,
   prompt_en,
   prompt_ha: "[Hausa pending]",
+  allowUnknown,
 });
 
 export function emergencyVariantForSign(code: string): EmergencyVariant {
@@ -146,10 +169,10 @@ export function emergencyVariantForSign(code: string): EmergencyVariant {
       title: "Bleeding danger sign",
       ipc: "Put on gloves. Do not give an injection. Avoid direct contact with blood or body fluids.",
       questions: [
-        q("E5", "Did the bleeding start without an injury?"),
-        q("E6", "Is there blood in vomit or stool?"),
-        q("E7", "Does the patient have a fever now or during this illness?"),
-        q("E8", "Has the patient had contact with someone who was bleeding or very ill?"),
+        q("E5", "Has the patient had fever for 3 or more days?"),
+        q("E6", "Has the patient taken malaria medicine without getting better?"),
+        q("E7", "Are there rats in the house, or did the patient care for someone with a similar illness?"),
+        q("E8", "Does the patient have a sore throat or facial swelling?"),
       ],
     };
   }
@@ -157,25 +180,25 @@ export function emergencyVariantForSign(code: string): EmergencyVariant {
     return {
       id: "jaundice",
       title: "Yellow eyes or skin",
-      ipc: "Use gloves and clean hands carefully. Do not give an injection. Keep the toilet and touched surfaces clean.",
+      ipc: "Wear gloves now. Do not give any injection. Do not touch blood or vomit with bare hands.",
       questions: [
-        q("E1", "Did the yellow colour start during this illness?"),
-        q("E2", "Does the patient have a fever now or during this illness?"),
-        q("E3", "Is the urine dark like tea or cola?"),
-        q("E4", "Is the stool unusually pale?"),
+        q("E1", "Did the yellow eyes start after the fever?"),
+        q("E2", "Is the urine dark?"),
+        q("E3", "Is there black or bloody vomit?"),
+        q("E4", "Has the patient ever had a yellow fever vaccine?", true),
       ],
     };
   }
-  if (code === "L1" || code === "L2") {
+  if (code === "L4") {
     return {
       id: "collapse",
-      title: "Collapse or breathing danger sign",
-      ipc: "Keep a safe distance from body fluids and use gloves if available. Further IPC wording is pending PharmAccess.",
+      title: "Cannot stand or drink",
+      ipc: "Wash your hands with soap. Pour stool and vomit into the latrine. Clean the floor with bleach.",
       questions: [
-        q("E13", "Did the collapse or breathing problem start suddenly?"),
-        q("E14", "Is the patient awake and responding normally now?"),
-        q("E15", "Did the patient have a fit or convulsion?"),
-        q("E16", "Was there fever before the collapse or breathing problem?"),
+        q("E13", "Has the patient had watery diarrhoea in the last 24 hours?"),
+        q("E14", "Is the stool like rice water?"),
+        q("E15", "Is there fever?"),
+        q("E16", "Has the patient passed urine in the last 6 hours?"),
       ],
     };
   }
@@ -185,9 +208,9 @@ export function emergencyVariantForSign(code: string): EmergencyVariant {
       title: "Patient looks very unwell",
       ipc: "Use standard precautions and avoid contact with body fluids until the clinic assesses the patient.",
       questions: [
-        q("E25", "Did the illness become much worse today?"),
-        q("E26", "Is the patient unusually sleepy, confused, or weak?"),
-        q("E27", "Is there any other danger sign not already recorded?"),
+        q("E25", "Is there fever?"),
+        q("E26", "Is there diarrhoea?"),
+        q("E27", "Is there a rash?"),
       ],
     };
   }

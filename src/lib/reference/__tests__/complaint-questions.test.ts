@@ -20,14 +20,21 @@ describe("complaint question sets", () => {
   });
 
   it("adds cough E1, E3 and E4 only when A8 is Yes", () => {
-    const visible = visibleComplaintQuestions("A", { COUGH_OR_BREATHING: "yes" });
+    const visible = visibleComplaintQuestions("A", { COUGH_PRESENT: "yes" });
     expect(visible.filter((item) => item.bridgeFrom === "A8").map((item) => item.id)).toEqual(["cough E1", "cough E3", "cough E4"]);
   });
 
-  it("stores fever under one canonical key across areas", () => {
-    const feverKeys = ["A", "C", "D", "E", "F"].map((area) =>
-      COMPLAINT_QUESTION_SETS[area as keyof typeof COMPLAINT_QUESTION_SETS].find((item) => item.prompt_en.includes("fever"))?.answerKey,
+  it("stores yes/no fever once while keeping A1 fever duration distinct", () => {
+    expect(COMPLAINT_QUESTION_SETS.A[0].answerKey).toBe("FEVER_DURATION");
+    const feverKeys = ["C", "D", "E", "F"].map((area) =>
+      COMPLAINT_QUESTION_SETS[area as keyof typeof COMPLAINT_QUESTION_SETS].find((item) => item.prompt_en.toLowerCase().includes("fever"))?.answerKey,
     );
     expect(new Set(feverKeys)).toEqual(new Set(["FEVER_PRESENT"]));
+  });
+
+  it("applies the age gates from v0.3", () => {
+    expect(visibleComplaintQuestions("F", {}, "5_to_17").map((item) => item.id)).toEqual(["F1", "F2", "F4", "F5"]);
+    expect(visibleComplaintQuestions("F", {}, "18_to_49").map((item) => item.id)).toEqual(["F2", "F4", "F5"]);
+    expect(visibleComplaintQuestions("F", {}, "under_28_days").map((item) => item.id)).toContain("F3");
   });
 });

@@ -13,7 +13,7 @@ export interface DetailsConsentResult extends DemographicsData {
   relationship: PatientRelationship;
   locale: "en" | "ha";
   verbalAttested: true;
-  consentedBy: "adult_patient" | "accompanying_adult" | "person_reporting";
+  consentedBy: "adult_patient" | "accompanying_adult" | "person_reporting" | "unaccompanied_minor";
 }
 
 interface StepDetailsConsentProps {
@@ -32,9 +32,8 @@ const WHO_OPTIONS: { value: PatientRelationship; label: string }[] = [
 ];
 
 const SEX_OPTIONS: { value: DemographicsData["sex"]; label: string; ha: string }[] = [
-  { value: "female", label: "Female", ha: "Mace" },
   { value: "male", label: "Male", ha: "Namiji" },
-  { value: "other_not_stated", label: "Other / not stated", ha: "[Hausa pending]" },
+  { value: "female", label: "Female", ha: "Mace" },
 ];
 
 function ChoiceGrid<T extends string>({
@@ -84,14 +83,16 @@ export function StepDetailsConsent({ presence, ageBand, isMinor, caregiverReport
 
   const consentedBy = useMemo<DetailsConsentResult["consentedBy"]>(() => {
     if (presence === "at_home") return "person_reporting";
+    if (isMinor && relationship === "myself") return "unaccompanied_minor";
     if (isMinor || relationship === "my_child") return "accompanying_adult";
     return "adult_patient";
   }, [isMinor, presence, relationship]);
 
   const consentName = {
-    adult_patient: "the adult patient",
-    accompanying_adult: "the accompanying adult",
-    person_reporting: "the person reporting",
+    adult_patient: "Consent given by the patient, who is an adult and present.",
+    accompanying_adult: "Consent given by the accompanying adult for the minor.",
+    person_reporting: "Consent given by the person reporting.",
+    unaccompanied_minor: "The minor is unaccompanied. Screening and referral proceed; this record is flagged.",
   }[consentedBy];
 
   const canContinue = Boolean(relationship && sex && verbalAttested && (!showPregnancy || pregnancy));
@@ -105,7 +106,7 @@ export function StepDetailsConsent({ presence, ageBand, isMinor, caregiverReport
       consentedBy,
       ageBand,
       sex,
-      pregnancyStatus: showPregnancy ? (pregnancy as PregnancyChoice) : "not_pregnant",
+      pregnancyStatus: showPregnancy ? (pregnancy as PregnancyChoice) : null,
       // These legacy persistence columns are outside the v0.3 Step 4 screen.
       insuranceStatus: "no_insurance",
       educationLevel: "none_primary",
@@ -130,9 +131,15 @@ export function StepDetailsConsent({ presence, ageBand, isMinor, caregiverReport
               <div>
                 <p className="font-semibold text-[#0051a8]">Caregiver-reported</p>
                 <p className="text-sm text-[#315f8b] mt-0.5">The patient is absent. This record will be flagged as reported by another person.</p>
-                {isMinor && <p className="text-sm font-medium text-[#315f8b] mt-1">The minor is unaccompanied; screening and referral can still proceed.</p>}
                 <p className="text-xs text-[#315f8b] mt-1">[Hausa pending]</p>
               </div>
+            </div>
+          )}
+
+          {presence === "with_me" && isMinor && relationship === "myself" && (
+            <div className="rounded-[16px] border border-[#cfd8e1] bg-[#f5f7f9] p-4 flex gap-3" role="note">
+              <Flag className="size-5 text-[#596b7c] shrink-0 mt-0.5" />
+              <div><p className="font-semibold text-[#354554]">Unaccompanied minor — record flagged</p><p className="text-sm text-[#596b7c] mt-0.5">Screening, advice and referral proceed as normal.</p><p className="text-xs text-[#596b7c] mt-1">[Hausa pending]</p></div>
             </div>
           )}
 
@@ -166,13 +173,13 @@ export function StepDetailsConsent({ presence, ageBand, isMinor, caregiverReport
               <ShieldCheck className="size-6 text-[#0073f3] shrink-0" />
               <div>
                 <p className="text-xs font-bold uppercase tracking-wider text-[#0073f3]">Read this aloud</p>
-                <p className="text-sm sm:text-base text-[#242b33] leading-relaxed mt-1">“I will ask a few questions about the patient’s health. The answers are anonymous and help guide what to do next. This screening does not diagnose an illness. Do you agree to continue?”</p>
+                <p className="text-sm sm:text-base text-[#242b33] leading-relaxed mt-1">“I will ask a few quick safety questions and keep a record. Your name is not saved.”</p>
                 <p className="text-xs text-[#6e8298] mt-1">[Hausa pending]</p>
               </div>
             </div>
             <button type="button" onClick={() => setVerbalAttested((current) => !current)} className={cn("min-h-11 rounded-[14px] border p-4 text-left flex items-start gap-3", verbalAttested ? "border-[#0073f3] bg-[#f0f7ff]" : "border-[#dfe5eb] bg-white") }>
               <span className={cn("size-5 rounded-[5px] border flex items-center justify-center shrink-0 mt-0.5", verbalAttested ? "bg-[#0073f3] border-[#0073f3] text-white" : "border-[#b8c5d1]") }>{verbalAttested && <Check className="size-3 stroke-[3]" />}</span>
-              <span><span className="block text-sm sm:text-base font-medium text-[#242b33]">I confirm {consentName} gave verbal consent.</span><span className="block text-xs text-[#6e8298] mt-0.5">[Hausa pending]</span></span>
+              <span><span className="block text-sm sm:text-base font-medium text-[#242b33]">{consentName}</span><span className="block text-xs text-[#6e8298] mt-0.5">[Hausa pending]</span></span>
             </button>
           </section>
         </div>

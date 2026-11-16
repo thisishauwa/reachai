@@ -43,7 +43,7 @@ export function StepLookCheck({ presence, ageBand, onContinue, onPrevious }: Ste
   const questions = useMemo(() => visibleCaregiverQuestions(ageBand), [ageBand]);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [answers, setAnswers] = useState<Record<string, LookCheckAnswer>>({});
-  const [submitted, setSubmitted] = useState(false);
+  const hasStarted = Object.keys(answers).length > 0;
 
   const unanswered = !isPresent && questions.some((question) => !answers[question.code]);
   const dangerCodes = isPresent ? [...checked] : dangerSignsFromCaregiverAnswers(answers);
@@ -60,7 +60,6 @@ export function StepLookCheck({ presence, ageBand, onContinue, onPrevious }: Ste
   };
 
   const handleContinue = () => {
-    setSubmitted(true);
     if (unanswered) return;
     onContinue({
       selectedSignCodes: dangerCodes,
@@ -81,12 +80,12 @@ export function StepLookCheck({ presence, ageBand, onContinue, onPrevious }: Ste
           <div className="flex flex-col gap-1.5">
             <span className="text-[#0590f9] text-xs font-semibold uppercase tracking-wider">Step 3 of 6 · Look-check</span>
             <h2 className="text-xl sm:text-2xl font-medium text-[#001f3e] leading-snug">
-              {isPresent ? "Look at the patient now" : "Ask the person in front of you"}
+              {isPresent ? "Look at the patient. Do you see any of these?" : "Ask the person in front of you"}
             </h2>
             <p className="text-sm sm:text-base text-[#6e8298]">
               {isPresent
-                ? "Tick every danger sign you can see. Any sign means refer now."
-                : "Ask every question about the patient. Do not guess an answer."}
+                ? "Tick all that apply. Ask only about the fit. The patient is here, so the rest you can see."
+                : "You cannot see the patient, so ask. Don't know is a real answer — do not guess."}
             </p>
             <p className="text-xs text-[#6e8298]">[Hausa pending]</p>
           </div>
@@ -126,7 +125,7 @@ export function StepLookCheck({ presence, ageBand, onContinue, onPrevious }: Ste
                 Caregiver-reported · the patient is not here. <span className="block text-xs mt-0.5">[Hausa pending]</span>
               </div>
               {questions.map((question, index) => {
-                const missing = submitted && !answers[question.code];
+                const missing = hasStarted && !answers[question.code];
                 return (
                   <fieldset key={question.code} className={cn("bg-white rounded-[16px] p-4 sm:p-5 border flex flex-col gap-3", missing ? "border-[#d44424]" : "border-[#e4e8ec]") }>
                     <legend className="sr-only">{question.prompt_en}</legend>
@@ -179,7 +178,7 @@ export function StepLookCheck({ presence, ageBand, onContinue, onPrevious }: Ste
           aria-disabled={unanswered}
           className={cn("min-h-11 rounded-[12px] bg-[#0073f3] px-5 sm:px-8 text-sm sm:text-base font-medium text-white shadow-sm", unanswered && "opacity-50 cursor-not-allowed")}
         >
-          {primarySignCode ? "Continue — acute" : "None of these — continue"}
+          {primarySignCode ? "Continue — acute" : isPresent ? "None of these — continue" : "Continue"}
         </button>
       </div>
     </div>

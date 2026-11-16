@@ -30,4 +30,21 @@ describe("StepEmergency", () => {
       expect.objectContaining({ LOOK_CHECK_ACUTE: "yes", LOOK_CHECK_PRIMARY_SIGN: "L8" }),
     );
   });
+
+  it.each([
+    ["L5", ["E1", "E2", "E3", "E4"], /yellow eyes start after the fever/i],
+    ["L3", ["E5", "E6", "E7", "E8"], /fever for 3 or more days/i],
+    ["L4", ["E13", "E14", "E15", "E16"], /watery diarrhoea in the last 24 hours/i],
+  ])("renders the exact in-scope question set for %s", (sign, ids, firstPrompt) => {
+    render(<StepEmergency primarySignCode={sign} caregiverReported={false} onComplete={vi.fn()} />);
+    ids.forEach((id) => expect(screen.getByText(id)).toBeInTheDocument());
+    expect(screen.getAllByText(firstPrompt)).toHaveLength(2);
+  });
+
+  it("allows Don't know throughout the absent Journey 2 bleeding set", () => {
+    render(<StepEmergency primarySignCode="L3" caregiverReported onComplete={vi.fn()} />);
+    screen.getAllByRole("group").forEach((group) => {
+      expect(within(group).getByRole("button", { name: /^Don't know/ })).toBeInTheDocument();
+    });
+  });
 });
