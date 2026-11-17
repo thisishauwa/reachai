@@ -18,7 +18,7 @@ describe("TriageBottomSheet", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /Confirm Referral/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Continue to referral/i }));
     expect(onConfirmReferral).toHaveBeenCalledTimes(1);
     expect(onCompleteRoutine).not.toHaveBeenCalled();
   });
@@ -38,7 +38,7 @@ describe("TriageBottomSheet", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /Complete assessment/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Save and finish/i }));
     expect(onCompleteRoutine).toHaveBeenCalledTimes(1);
     expect(onConfirmReferral).not.toHaveBeenCalled();
   });

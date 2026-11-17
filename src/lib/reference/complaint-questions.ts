@@ -102,6 +102,15 @@ const QUESTION_HA_BY_ID: Record<string, string> = {
   F3: "Jariri kasa da kwana 28: yana da wahalar shan nono, taurin jiki, ko karkarwa?",
   F4: "Akwai zazzabi?",
   F5: "Idan ba daya daga cikin wadannan ba—menene babbar matsalar?",
+  "A2a": "Haske yana cutar da idanun majiyyacin?",
+  "A2b": "Akwai tabo masu ruwan shunayya ko duhu da ba sa bacewa idan an matsa?",
+  "A2c": "Ga jariri kasa da shekara 1: wurin laushin kansa ya kumbura?",
+  "A3a": "Kurajen sun fara a fuska ko bayan kunne sannan suka bazu kasa?",
+  "A3b": "Akwai jajayen idanu masu ruwa, tari ko majina?",
+  "A3c": "An yi rigakafin kyanda?",
+  "A4a": "Akwai ciwon makogwaro?",
+  "A4b": "Akwai kumburin fuska?",
+  "A4c": "Akwai ciwon kirji ko baya?",
 };
 
 const option = (value: string, label: string, label_ha = OPTION_HA_BY_VALUE[value] ?? label): ComplaintOption => ({ value, label, label_ha });
@@ -169,12 +178,38 @@ export const COMPLAINT_QUESTION_SETS: Record<ComplaintAreaCode, ComplaintQuestio
     question("F2", "ANIMAL_BITE", "Bitten or scratched by an animal in last 3 months?", YES_NO),
     question("F3", "SICK_NEWBORN_SIGNS", "Baby under 28 days: feeding difficulty, stiffness, or spasms?", YES_NO, { visibleForAgeBands: NEWBORN_BANDS }),
     question("F4", "FEVER_PRESENT", "Is there fever?", YES_NO),
-    question("F5", "OTHER_MAIN_PROBLEM", "None of these — main problem", [option("other_not_listed", "Another problem")]),
+    question("F5", "OTHER_MAIN_PROBLEM", "None of these — main problem", [
+      option("eye_or_ear_problem", "Eye or ear problem", "Matsalar ido ko kunne"),
+      option("stomach_or_body_pain", "Stomach or body pain", "Ciwon ciki ko jiki"),
+      option("injury_or_wound", "Injury or wound", "Rauni ko ciwo"),
+      option("other_not_listed", "Another problem", "Wata matsala da ba ta cikin jerin"),
+    ]),
   ],
 };
 
+const A2_FOLLOW_UPS: ComplaintQuestion[] = [
+  question("A2a", "PHOTOPHOBIA", "Does light hurt the eyes?", YES_NO),
+  question("A2b", "NON_BLANCHING_SPOTS", "Purple or dark spots that stay when pressed?", YES_NO),
+  question("A2c", "BULGING_FONTANELLE", "Infant under 1: is the soft spot bulging?", YES_NO, { visibleForAgeBands: UNDER_1_BANDS }),
+];
+
+const A3_FOLLOW_UPS: ComplaintQuestion[] = [
+  question("A3a", "RASH_START_LOCATION", "Did the rash start on the face or behind the ears and spread down?", [
+    option("face_or_behind_ears", "Yes"),
+    option("elsewhere", "No"),
+  ]),
+  question("A3b", "MEASLES_EYE_COUGH_SIGNS", "Red watery eyes, cough or runny nose?", YES_NO),
+  question("A3c", "MEASLES_VACCINE", "Measles vaccine?", YES_NO_UNKNOWN, { visibleForAgeBands: UNDER_15_BANDS }),
+];
+
+const A4_A5_FOLLOW_UPS: ComplaintQuestion[] = [
+  question("A4a", "LASSA_SORE_THROAT", "Is there a sore throat?", YES_NO),
+  question("A4b", "LASSA_FACIAL_SWELLING", "Is there facial swelling?", YES_NO),
+  question("A4c", "LASSA_CHEST_BACK_PAIN", "Is there chest or back pain?", YES_NO),
+];
+
 export interface DisplayQuestion extends ComplaintQuestion {
-  bridgeFrom?: "A7" | "A8";
+  bridgeFrom?: "A7" | "A8" | "F4";
 }
 
 function appliesToAge(question: ComplaintQuestion, ageBand: string): boolean {
@@ -182,7 +217,23 @@ function appliesToAge(question: ComplaintQuestion, ageBand: string): boolean {
 }
 
 export function visibleComplaintQuestions(area: ComplaintAreaCode, answers: Record<string, ComplaintAnswer>, ageBand = "18_to_49"): DisplayQuestion[] {
-  const result: DisplayQuestion[] = COMPLAINT_QUESTION_SETS[area].filter((item) => appliesToAge(item, ageBand));
+  const result: DisplayQuestion[] = [];
+  for (const item of COMPLAINT_QUESTION_SETS[area].filter((questionItem) => appliesToAge(questionItem, ageBand))) {
+    result.push(item);
+    if (area === "A" && item.id === "A2" && answers.NECK_FLEXION === "no_stiff") {
+      result.push(...A2_FOLLOW_UPS.filter((followUp) => appliesToAge(followUp, ageBand)));
+    }
+    if (area === "A" && item.id === "A3" && answers.RASH_PRESENT === "yes") {
+      result.push(...A3_FOLLOW_UPS.filter((followUp) => appliesToAge(followUp, ageBand)));
+    }
+    if (
+      area === "A" &&
+      item.id === "A5" &&
+      (answers.MALARIA_MEDICINE_NO_IMPROVEMENT === "yes" || answers.LASSA_EXPOSURE === "yes")
+    ) {
+      result.push(...A4_A5_FOLLOW_UPS);
+    }
+  }
 
   if (area === "A" && answers.DIARRHOEA_OR_VOMITING === "yes") {
     result.push(...COMPLAINT_QUESTION_SETS.B.slice(0, 4).map((item) => ({ ...item, bridgeFrom: "A7" as const })));
@@ -190,6 +241,15 @@ export function visibleComplaintQuestions(area: ComplaintAreaCode, answers: Reco
   if (area === "A" && answers.COUGH_PRESENT === "yes") {
     const coughBridge = [COMPLAINT_QUESTION_SETS.E[0], COMPLAINT_QUESTION_SETS.E[2], COMPLAINT_QUESTION_SETS.E[3]];
     result.push(...coughBridge.map((item) => ({ ...item, bridgeFrom: "A8" as const })));
+  }
+
+  if (area === "F" && answers.FEVER_PRESENT === "yes") {
+    result.push(
+      ...visibleComplaintQuestions("A", answers, ageBand).map((item) => ({
+        ...item,
+        bridgeFrom: "F4" as const,
+      })),
+    );
   }
 
   const seen = new Set<string>();

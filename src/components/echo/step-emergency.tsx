@@ -8,6 +8,9 @@ import { emergencyVariantForSign, type LookCheckAnswer } from "@/lib/reference/l
 interface StepEmergencyProps {
   primarySignCode: string;
   caregiverReported: boolean;
+  referralCode: string;
+  destinationName: string;
+  destinationPhone?: string | null;
   onComplete: (questionSetId: string, answers: Record<string, unknown>) => void;
   onPrevious?: () => void;
 }
@@ -18,7 +21,7 @@ const YES_NO_OPTIONS: { value: LookCheckAnswer; label: string; ha: string }[] = 
 ];
 const UNKNOWN_OPTION: { value: LookCheckAnswer; label: string; ha: string } = { value: "unknown", label: "Don't know", ha: "Ban sani ba" };
 
-export function StepEmergency({ primarySignCode, caregiverReported, onComplete, onPrevious }: StepEmergencyProps) {
+export function StepEmergency({ primarySignCode, caregiverReported, referralCode, destinationName, destinationPhone, onComplete, onPrevious }: StepEmergencyProps) {
   const variant = useMemo(() => emergencyVariantForSign(primarySignCode), [primarySignCode]);
   const [answers, setAnswers] = useState<Record<string, LookCheckAnswer>>({});
   const hasStarted = Object.keys(answers).length > 0;
@@ -40,9 +43,9 @@ export function StepEmergency({ primarySignCode, caregiverReported, onComplete, 
         <div className="size-11 rounded-full bg-[#d44424] text-white flex items-center justify-center shrink-0"><AlertTriangle className="size-6" /></div>
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-[#b5351c]">Acute</p>
-          <h2 className="text-xl sm:text-2xl font-semibold text-[#5b1c10] mt-1">Refer now — do not delay</h2>
+          <h2 className="text-xl sm:text-2xl font-semibold text-[#5b1c10] mt-1">Refer now - do not delay</h2>
           <p className="text-sm sm:text-base text-[#7a3426] mt-2">
-            {caregiverReported ? "Tell the caregiver to bring the patient to the clinic immediately." : "Keep the patient with you while transport is arranged."}
+            {caregiverReported ? `Tell the caregiver to bring the patient to ${destinationName} immediately.` : `Arrange transport to ${destinationName} before anything else.`}
           </p>
           <p className="text-xs text-[#7a3426] mt-1">A kai shi asibiti yanzu — kada a yi jinkiri.</p>
         </div>
@@ -60,19 +63,26 @@ export function StepEmergency({ primarySignCode, caregiverReported, onComplete, 
       <section className="rounded-[18px] border border-[#dfe5eb] bg-white p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-[#6e8298]">Referral code</p>
-          <p className="font-mono text-2xl font-bold tracking-[0.18em] text-[#001f3e] mt-1">BK-TRN</p>
+          <p className="font-mono text-2xl font-bold tracking-[0.18em] text-[#001f3e] mt-1">{referralCode}</p>
+          <p className="text-xs font-semibold text-[#287a39] mt-1">Referral issued - questions below will not cancel or delay it.</p>
           <p className="text-xs text-[#6e8298] mt-1">Give this code to the clinic · Ba wa asibitin wannan lambar</p>
         </div>
-        <a href="tel:+2348000000000" className="min-h-11 rounded-[12px] bg-[#0073f3] px-5 text-white font-medium inline-flex items-center justify-center gap-2">
-          <Phone className="size-4" /> Call the clinic
-        </a>
+        {destinationPhone ? (
+          <a href={`tel:${destinationPhone}`} className="min-h-11 rounded-[12px] bg-[#0073f3] px-5 text-white font-medium inline-flex items-center justify-center gap-2">
+            <Phone className="size-4" /> Call the clinic
+          </a>
+        ) : (
+          <div className="min-h-11 rounded-[12px] border border-[#d8e0e7] bg-[#f7f9fb] px-4 text-sm text-[#5f7081] inline-flex items-center justify-center gap-2" aria-label="Clinic phone number unavailable">
+            <Phone className="size-4" /> Number unavailable
+          </div>
+        )}
       </section>
 
       <section className="rounded-[20px] bg-[#f9f9f9] p-5 sm:p-8 flex flex-col gap-5">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-[#0590f9]">While transport is arranged</p>
           <h3 className="text-lg sm:text-xl font-semibold text-[#001f3e] mt-1">{variant.title}: classifying questions</h3>
-          <p className="text-sm text-[#6e8298] mt-1">These questions support the referral. They do not diagnose the patient.</p>
+          <p className="text-sm text-[#6e8298] mt-1">These questions support the referral. The referral has already been made and these answers do not diagnose the patient.</p>
         </div>
         {variant.questions.map((question) => {
           const missing = hasStarted && !answers[question.code];

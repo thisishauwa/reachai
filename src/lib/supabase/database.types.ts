@@ -75,6 +75,10 @@ export interface Database {
           name: string;
           code: string;
           facility_type: string | null;
+          phone_e164: string | null;
+          address_text: string | null;
+          distance_label: string | null;
+          opening_status: string | null;
           timezone: string;
           is_active: boolean;
           created_at: string;
@@ -85,6 +89,10 @@ export interface Database {
           name: string;
           code: string;
           facility_type?: string | null;
+          phone_e164?: string | null;
+          address_text?: string | null;
+          distance_label?: string | null;
+          opening_status?: string | null;
           timezone?: string;
           is_active?: boolean;
         }

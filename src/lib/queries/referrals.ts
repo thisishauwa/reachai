@@ -86,6 +86,13 @@ export interface ReferralDetail {
   created_at: string;
   source_facility_id: string;
   destination_facility_id: string;
+  encounter_id: string;
+  encounters?: {
+    encounter_code: string;
+    encounter_demographics?: { sex: string | null; age_band: string | null; pregnancy_status: string | null }[];
+    triage_outcomes?: { severity: string; condition_code: string | null; condition_label_en: string | null; guidance_en: string | null }[];
+    encounter_answers?: { question_id: string; value: unknown }[];
+  } | null;
   referral_events: {
     id: string;
     from_status: ReferralStatus | null;
@@ -109,7 +116,7 @@ export function useReferral(referralId: string | undefined) {
       const { data, error } = await supabase
         .from("referrals")
         .select(
-          "*, referral_events(id, from_status, to_status, reason, occurred_at), incentive_evaluations(eligible, reason, closure_seconds)",
+          "*, referral_events(id, from_status, to_status, reason, occurred_at), incentive_evaluations(eligible, reason, closure_seconds), encounters!referrals_encounter_id_fkey(encounter_code, encounter_demographics(sex, age_band, pregnancy_status), triage_outcomes(severity, condition_code, condition_label_en, guidance_en), encounter_answers(question_id, value))",
         )
         .eq("id", referralId!)
         .single();
@@ -172,7 +179,7 @@ export function useDestinationFacilities(excludeFacilityId: string) {
       const supabase = createClient();
       const { data, error } = await supabase
         .from("facilities")
-        .select("id, name, code")
+        .select("id, name, code, phone_e164, address_text, distance_label, opening_status")
         .eq("is_active", true)
         .neq("id", excludeFacilityId);
       if (error) throw error;

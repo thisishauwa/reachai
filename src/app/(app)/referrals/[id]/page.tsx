@@ -1,16 +1,29 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useMemo, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { formatDistanceToNow } from "date-fns";
+import { Check, Clock3, Send, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { useReferral, useTransitionReferral } from "@/lib/queries/referrals";
 import { useSession } from "@/lib/session/session-context";
-import { canTransitionReferral } from "@/lib/logic/referral-state-machine";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Textarea } from "@/components/ui/textarea";
-import { format } from "date-fns";
 import { MobileSubpageHeader } from "@/components/nav/mobile-subpage-header";
-import type { ReferralStatus } from "@/lib/supabase/database.types";
+import { careGuidanceFor } from "@/lib/reference/referral-guidance";
+
+const CONFIRMATIONS = [
+  "Confirmed IDSR priority disease",
+  "Confirmed other IDSR disease",
+  "Non-IDSR condition",
+  "Indeterminate",
+] as const;
+
+function readableAnswer(value: unknown): string {
+  if (Array.isArray(value)) return value.join(", ").replaceAll("_", " ");
+  if (value && typeof value === "object" && "answer" in value) return readableAnswer((value as { answer: unknown }).answer);
+  return String(value ?? "Not recorded").replaceAll("_", " ");
+}
 
 export default function ReferralDetailPage() {
   const params = useParams();
@@ -19,418 +32,57 @@ export default function ReferralDetailPage() {
   const { activeFacility } = useSession();
   const { data: referral, isLoading } = useReferral(id);
   const transition = useTransitionReferral();
-  const [cancelReason, setCancelReason] = useState("");
-  const [showCancel, setShowCancel] = useState(false);
+  const [confirmation, setConfirmation] = useState<string>("");
+  const [clinicalNote, setClinicalNote] = useState("");
 
-  if (isLoading || !referral) {
-    return (
-      <div className="p-6 space-y-4">
-        <Skeleton className="h-12 w-48 rounded-full" />
-        <Skeleton className="h-28 w-full rounded-[28px]" />
-        <Skeleton className="h-72 w-full rounded-[28px]" />
-      </div>
-    );
-  }
+  const encounter = referral?.encounters;
+  const triage = encounter?.triage_outcomes?.[0];
+  const demographics = encounter?.encounter_demographics?.[0];
+  const guidance = careGuidanceFor(triage?.condition_code || "UNCLASSIFIED", (triage?.severity as "emergency" | "urgent" | "routine") || "urgent");
+  const isDestination = referral?.destination_facility_id === activeFacility.facilityId;
+  const elapsed = referral ? formatDistanceToNow(new Date(referral.created_at)) : "";
+  const answerRows = useMemo(() => (encounter?.encounter_answers ?? []).filter((answer) => answer.question_id !== "REFERRAL_OUTCOME"), [encounter?.encounter_answers]);
 
-  const actor = {
-    isSourceMember: referral.source_facility_id === activeFacility?.facilityId,
-    isDestinationMember:
-      referral.destination_facility_id === activeFacility?.facilityId,
+  if (isLoading || !referral) return <div className="p-6 space-y-4"><Skeleton className="h-12 w-48 rounded-full" /><Skeleton className="h-44 w-full rounded-[24px]" /><Skeleton className="h-80 w-full rounded-[24px]" /></div>;
+
+  const saveClinicalResult = async () => {
+    if (!confirmation) { toast.error("Choose a diagnosis confirmation before saving"); return; }
+    if (!isDestination) { toast.error("Only the receiving clinic can close this referral"); return; }
+    try {
+      if (referral.status === "created") await transition.mutateAsync({ referralId: referral.id, toStatus: "arrived" });
+      await transition.mutateAsync({ referralId: referral.id, toStatus: "closed", reason: `${confirmation}${clinicalNote.trim() ? `: ${clinicalNote.trim()}` : ""}` });
+      toast.success("Clinical result sent to DHIS2 and back to the outlet");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save the clinical result");
+    }
   };
 
-  async function doTransition(toStatus: ReferralStatus, reason?: string) {
-    const check = canTransitionReferral(referral!.status, toStatus, actor, reason);
-    if (!check.allowed) {
-      toast.error(check.reason);
-      return;
-    }
-    try {
-      await transition.mutateAsync({
-        referralId: referral!.id,
-        toStatus,
-        reason,
-      });
-      toast.success(`Referral marked ${toStatus}`);
-      setShowCancel(false);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Transition failed");
-    }
-  }
-
-  const events = [...(referral.referral_events ?? [])].sort(
-    (a, b) => new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime()
-  );
-
-  const createdDate = new Date(referral.created_at);
-  const createdTimeStr = format(createdDate, "HH:mm");
-  const createdDayStr = format(createdDate, "d MMMM yyyy");
-
-  const arrivedEvent = events.find((e) => e.to_status === "arrived");
-  const arrivedDate = arrivedEvent ? new Date(arrivedEvent.occurred_at) : createdDate;
-  const isArrived =
-    referral.status === "arrived" ||
-    referral.status === "closed" ||
-    Boolean(arrivedEvent);
-
-  const closedEvent = events.find((e) => e.to_status === "closed");
-  const closedDate = closedEvent ? new Date(closedEvent.occurred_at) : createdDate;
-  const isClosed = referral.status === "closed" || Boolean(closedEvent);
-
-  const cancelledEvent = events.find((e) => e.to_status === "cancelled");
-  const cancelledDate = cancelledEvent ? new Date(cancelledEvent.occurred_at) : createdDate;
-  const isCancelled = referral.status === "cancelled" || Boolean(cancelledEvent);
-
-  const incentive = Array.isArray(referral.incentive_evaluations)
-    ? referral.incentive_evaluations[0]
-    : null;
-  const isEligible = Boolean(incentive?.eligible);
-  const closureHours =
-    incentive?.closure_seconds != null
-      ? Math.round(incentive.closure_seconds / 3600)
-      : 12;
-
   return (
-    <div className="flex flex-col gap-6 pt-4 sm:pt-6">
-      {/* Mobile Top Navigation Bar: Back + Title + Code + Menu */}
-      <MobileSubpageHeader
-        title="Referral Details"
-        backHref="/referrals"
-        backLabel="Referrals"
-        rightElement={
-          <div className="bg-[#ffdcd5] px-2.5 py-1 rounded-full shrink-0 border-0 shadow-none">
-            <span className="text-[#d44424] font-mono text-xs font-semibold">
-              {referral.referral_code}
-            </span>
-          </div>
-        }
-      />
+    <div className="flex flex-col gap-5 pt-4 pb-12 sm:pt-6">
+      <MobileSubpageHeader title="Incoming referral" backHref="/referrals" backLabel="Referrals" rightElement={<span className="rounded-full bg-[#ffe7e1] px-3 py-1 font-mono text-xs font-bold text-[#b5351c]">{referral.referral_code}</span>} />
+      <div className="hidden sm:flex items-center gap-4"><button type="button" onClick={() => router.back()} className="size-12 rounded-full bg-[#f2f3f5]">←</button><div><h1 className="text-2xl font-semibold text-[#242b33]">{activeFacility.facilityName} · incoming referral</h1><p className="text-sm text-[#6e8298]">Full clinical handover unlocked by the signed referral code.</p></div></div>
 
-      {/* Desktop Top Header */}
-      <div className="hidden sm:flex items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={() => router.back()}
-            aria-label="Back"
-            style={{ border: "none", outline: "none", boxShadow: "none" }}
-            className="size-[56px] rounded-full bg-[#f7f7f7] hover:bg-[#ececec] flex items-center justify-center transition-colors cursor-pointer shrink-0 border-0 border-none shadow-none"
-          >
-            <img
-              src="/icons/arrow-left.svg"
-              alt=""
-              className="size-7"
-            />
-          </button>
-          <h1 className="text-xl sm:text-[24px] font-normal text-[#495766] tracking-[-0.3px]">
-            Referral Details
-          </h1>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <div 
-            style={{ border: "none", boxShadow: "none" }}
-            className="bg-[#ffdcd5] px-2.5 py-0.5 rounded-full shrink-0 border-0 shadow-none"
-          >
-            <span className="text-[#d44424] font-mono text-xs sm:text-sm font-medium">
-              {referral.referral_code}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Privacy Protected Banner (Figma 9021:12007) - Strictly NO drop shadow, NO border */}
-      <div 
-        style={{ border: "none", boxShadow: "none", filter: "none" }}
-        className="bg-[#fafafa] rounded-[28px] p-5 flex gap-5 items-start w-full border-0 border-none shadow-none"
-      >
-        <div 
-          style={{ border: "none", boxShadow: "none" }}
-          className="size-[56px] rounded-[12px] bg-[#f2f3f5] flex items-center justify-center shrink-0 border-0 shadow-none"
-        >
-          <img
-            src="/icons/security-safe.svg"
-            alt=""
-            className="size-6"
-          />
-        </div>
-        <div className="min-w-0 flex-1">
-          <h2 className="font-medium text-[#242b33] text-[18px]">
-            Privacy protected
-          </h2>
-          <p className="text-[#6e8298] text-[16px] leading-[24px] mt-0.5">
-            Patient identifiers and clinical details are intentionally hidden
-            from this view to maintain security compliance.
-          </p>
-        </div>
-      </div>
-
-      {/* Incentive Eligible Banner (Figma 9021:12098) - Strictly NO drop shadow, NO border */}
-      {isEligible && (
-        <div 
-          style={{ border: "none", boxShadow: "none", filter: "none" }}
-          className="bg-[#f1fdf3] rounded-[28px] p-5 flex gap-5 items-start w-full border-0 border-none shadow-none animate-in fade-in-50 duration-200"
-        >
-          <div 
-            style={{ border: "none", boxShadow: "none" }}
-            className="size-[56px] rounded-[12px] bg-[#d3f6d8] flex items-center justify-center shrink-0 border-0 shadow-none"
-          >
-            <img
-              src="/icons/gift.svg"
-              alt=""
-              className="size-6"
-            />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h2 className="font-medium text-[#077d17] text-[18px]">
-              Incentive eligible
-            </h2>
-            <p className="text-[#0bad21] text-[16px] leading-[24px] mt-0.5">
-              This referral has met all criteria for incentive.
-            </p>
-            <div className="flex items-center gap-2 mt-3">
-              <span className="size-1.5 rounded-full bg-[#09951c]" />
-              <p className="text-sm text-[#6e8298]">
-                Time to closure:{" "}
-                <span className="font-medium text-[#6e8298]">
-                  {closureHours} hours
-                </span>
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Referral Timeline (Figma 9021:12007, 12050, 12098) */}
-      <section className="flex flex-col gap-2">
-        <h2 className="text-[18px] font-normal text-[#495766]">
-          Referral timeline
-        </h2>
-
-        <div 
-          style={{ border: "none", boxShadow: "none" }}
-          className="bg-[#fafafa] rounded-[28px] p-5 flex flex-col gap-5 w-full border-0 border-none shadow-none"
-        >
-          {/* Step 1: Referral created */}
-          <div className="flex items-center gap-5">
-            <div 
-              style={{ border: "none", boxShadow: "none" }}
-              className="size-[48px] rounded-full bg-[#f2f3f5] flex items-center justify-center shrink-0 border-0 shadow-none"
-            >
-              <img
-                src="/icons/tick.svg"
-                alt="Completed"
-                className="size-5"
-              />
-            </div>
-            <div className="flex flex-col gap-0.5">
-              <p className="font-medium text-[#242b33] text-[18px]">
-                Referral created
-              </p>
-              <div className="flex items-center gap-2 text-[#6e8298] text-sm">
-                <span>{createdTimeStr}</span>
-                <span className="size-1 rounded-full bg-[#a1aebc]" />
-                <span>{createdDayStr}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="h-px bg-[#f0f0f0] w-full" />
-
-          {/* Step 2: Patient arrival */}
-          <div className="flex items-center gap-5">
-            <div
-              style={{ border: "none", boxShadow: "none" }}
-              className={`size-[48px] rounded-full flex items-center justify-center shrink-0 border-0 shadow-none ${
-                isArrived ? "bg-[#f2f3f5]" : "bg-[#f2f3f5]/50"
-              }`}
-            >
-              {isArrived ? (
-                <img
-                  src="/icons/tick.svg"
-                  alt="Completed"
-                  className="size-5"
-                />
-              ) : (
-                <span className="size-2 rounded-full bg-[#cdd1d9]" />
-              )}
-            </div>
-            <div className="flex flex-col gap-0.5">
-              <p
-                className={`font-medium text-[18px] ${
-                  isArrived ? "text-[#242b33]" : "text-[#a1aebc]"
-                }`}
-              >
-                Patient arrival confirmed
-              </p>
-              <div className="text-sm">
-                {isArrived ? (
-                  <div className="flex items-center gap-2 text-[#6e8298]">
-                    <span>{format(arrivedDate, "HH:mm")}</span>
-                    <span className="size-1 rounded-full bg-[#a1aebc]" />
-                    <span>{format(arrivedDate, "d MMMM yyyy")}</span>
-                  </div>
-                ) : (
-                  <p className="text-[#a1aebc]">Awaiting patient arrival</p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="h-px bg-[#f0f0f0] w-full" />
-
-          {/* Step 3: Referral closed */}
-          <div className="flex items-center gap-5">
-            <div
-              style={{ border: "none", boxShadow: "none" }}
-              className={`size-[48px] rounded-full flex items-center justify-center shrink-0 border-0 shadow-none ${
-                isCancelled
-                  ? "bg-[#fff1ed]"
-                  : isClosed
-                  ? "bg-[#f2f3f5]"
-                  : "bg-[#f2f3f5]/50"
-              }`}
-            >
-              {isCancelled ? (
-                <span className="text-[#e05338] text-base font-bold">✕</span>
-              ) : isClosed ? (
-                <img
-                  src="/icons/tick.svg"
-                  alt="Completed"
-                  className="size-5"
-                />
-              ) : (
-                <span className="size-2 rounded-full bg-[#cdd1d9]" />
-              )}
-            </div>
-            <div className="flex flex-col gap-0.5">
-              <p
-                className={`font-medium text-[18px] ${
-                  isCancelled
-                    ? "text-[#e05338]"
-                    : isClosed
-                    ? "text-[#242b33]"
-                    : "text-[#a1aebc]"
-                }`}
-              >
-                {isCancelled ? "Referral cancelled" : "Referral closed"}
-              </p>
-              <div className="text-sm">
-                {isCancelled ? (
-                  <div className="flex items-center gap-2 text-[#e05338]/80">
-                    <span>{format(cancelledDate, "HH:mm")}</span>
-                    <span className="size-1 rounded-full bg-[#e05338]/40" />
-                    <span>{format(cancelledDate, "d MMMM yyyy")}</span>
-                  </div>
-                ) : isClosed ? (
-                  <div className="flex items-center gap-2 text-[#6e8298]">
-                    <span>{format(closedDate, "HH:mm")}</span>
-                    <span className="size-1 rounded-full bg-[#a1aebc]" />
-                    <span>{format(closedDate, "d MMMM yyyy")}</span>
-                  </div>
-                ) : (
-                  <p className="text-[#a1aebc]">Pending clinical resolution</p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Cancellation reason (if available) */}
-          {isCancelled && cancelledEvent?.reason && (
-            <>
-              <div className="h-px bg-[#f0f0f0] w-full" />
-              <div className="bg-[#fff1ed] rounded-[16px] px-4 py-3 flex flex-col gap-1">
-                <span className="text-xs font-medium text-[#e05338] uppercase tracking-wider">Cancellation reason</span>
-                <p className="text-sm text-[#6e8298] leading-relaxed">{cancelledEvent.reason}</p>
-              </div>
-            </>
-          )}
-        </div>
+      <section className="rounded-[24px] bg-[#001f3e] p-5 sm:p-7 text-white">
+        <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="font-mono text-3xl font-bold tracking-[0.15em]">{referral.referral_code}</p><div className="flex flex-wrap items-center gap-2 mt-3"><span className="rounded-full bg-[#d44424] px-3 py-1 text-xs font-semibold">{triage?.severity === "emergency" ? "Acute" : triage?.severity === "routine" ? "Routine" : "Urgent"}</span><span className="inline-flex items-center gap-1 text-sm text-[#c4d9ec]"><Clock3 className="size-4" />{elapsed} since issue</span></div></div><p className="text-sm text-[#c4d9ec]">Issued {new Date(referral.created_at).toLocaleString("en-GB")}</p></div>
       </section>
 
-      {/* Action Buttons */}
-      {(referral.status === "created" || referral.status === "arrived") && (
-        <div className="flex flex-col gap-2.5 pt-2">
-          {actor.isDestinationMember ? (
-            <>
-              {referral.status === "created" && (
-                <button
-                  type="button"
-                  disabled={transition.isPending}
-                  onClick={() => doTransition("arrived")}
-                  style={{ borderRadius: "12px", border: "none", outline: "none", boxShadow: "none" }}
-                  className="w-full h-[52px] rounded-[12px] bg-[#0073F3] hover:bg-[#0062d4] text-white font-medium text-[16px] transition-colors cursor-pointer flex items-center justify-center border-0 border-none shadow-none outline-none"
-                >
-                  {transition.isPending ? "Updating..." : "Mark arrived"}
-                </button>
-              )}
+      <div className="grid lg:grid-cols-2 gap-5">
+        <section className="rounded-[22px] border border-[#e4e8ec] bg-white p-5 sm:p-7">
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#6e8298]">Referral details</p>
+          <dl className="mt-4 grid grid-cols-[120px_1fr] gap-x-4 gap-y-3 text-sm"><dt className="text-[#6e8298]">Referred by</dt><dd className="font-medium text-[#242b33]">{referral.source_facility_id}</dd><dt className="text-[#6e8298]">Cadre</dt><dd className="font-medium text-[#242b33]">CP / PPMV outlet</dd><dt className="text-[#6e8298]">Patient</dt><dd className="font-medium text-[#242b33]">{demographics ? `${demographics.sex || "Sex not stated"}, ${(demographics.age_band || "age unknown").replaceAll("_", " ")}${demographics.pregnancy_status === "pregnant" ? ", pregnant" : ""}` : "Anonymous patient"}</dd><dt className="text-[#6e8298]">Reason</dt><dd className="font-medium text-[#242b33]">{guidance.severityReason}</dd><dt className="text-[#6e8298]">Given at outlet</dt><dd className="font-medium text-[#242b33]">{guidance.give.join(" ")}</dd></dl>
+        </section>
 
-              {referral.status === "arrived" && (
-                <button
-                  type="button"
-                  disabled={transition.isPending}
-                  onClick={() => doTransition("closed")}
-                  style={{ borderRadius: "12px", border: "none", outline: "none", boxShadow: "none" }}
-                  className="w-full h-[52px] rounded-[12px] bg-[#0073F3] hover:bg-[#0062d4] text-white font-medium text-[16px] transition-colors cursor-pointer flex items-center justify-center border-0 border-none shadow-none outline-none"
-                >
-                  {transition.isPending ? "Updating..." : "Mark closed"}
-                </button>
-              )}
-            </>
-          ) : (
-            <div className="w-full py-3 px-4 rounded-[12px] bg-[#f0f7ff] text-[#0073F3] text-sm text-center font-medium">
-              {referral.status === "created"
-                ? "Awaiting patient arrival at destination facility"
-                : "Patient arrived at destination facility (under care)"}
-            </div>
-          )}
+        <section className="rounded-[22px] border border-[#e4e8ec] bg-white p-5 sm:p-7">
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#6e8298]">Symptoms recorded at the outlet</p>
+          {answerRows.length ? <ul className="mt-4 divide-y divide-[#edf0f2]">{answerRows.map((answer) => <li key={`${answer.question_id}-${readableAnswer(answer.value)}`} className="py-2.5 text-sm flex justify-between gap-4"><span className="text-[#5f7081]">{answer.question_id.replaceAll("_", " ")}</span><span className="font-medium text-[#242b33] text-right capitalize">{readableAnswer(answer.value)}</span></li>)}</ul> : <p className="mt-4 text-sm text-[#6e8298]">No answer rows were returned. Use the referral reason and contact the outlet if clarification is needed.</p>}
+        </section>
+      </div>
 
-          {!showCancel ? (
-            <button
-              type="button"
-              onClick={() => setShowCancel(true)}
-              style={{ borderRadius: "12px", border: "none", outline: "none", boxShadow: "none" }}
-              className="w-full py-2.5 text-[15px] font-normal text-[#e05338] hover:text-[#c43b22] hover:bg-[#fff1ed] rounded-[12px] transition-colors cursor-pointer text-center border-0 border-none shadow-none outline-none"
-            >
-              Cancel referral
-            </button>
-          ) : (
-            <div 
-              style={{ border: "none", boxShadow: "none" }}
-              className="bg-[#fafafa] rounded-[24px] p-5 flex flex-col gap-3 border-0 border-none shadow-none"
-            >
-              <p className="text-sm font-medium text-[#242b33]">
-                Reason for cancellation
-              </p>
-              <Textarea
-                placeholder="Provide a brief clinical reason..."
-                value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
-                style={{ border: "none", outline: "none", borderRadius: "12px", boxShadow: "none" }}
-                className="rounded-[12px] text-sm bg-white p-3 border-0 shadow-none resize-none focus:ring-1 focus:ring-[#e05338]"
-              />
-              <div className="flex gap-2.5 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setShowCancel(false)}
-                  style={{ borderRadius: "12px", border: "none", outline: "none", boxShadow: "none" }}
-                  className="flex-1 h-[44px] rounded-[12px] bg-[#f2f3f5] hover:bg-[#e7e8eb] text-sm font-medium text-[#495766] transition-colors border-0 border-none shadow-none outline-none"
-                >
-                  Keep referral
-                </button>
-                <button
-                  type="button"
-                  disabled={!cancelReason.trim() || transition.isPending}
-                  onClick={() => doTransition("cancelled", cancelReason.trim())}
-                  style={{ borderRadius: "12px", border: "none", outline: "none", boxShadow: "none" }}
-                  className="flex-1 h-[44px] rounded-[12px] bg-[#e05338] hover:bg-[#c43b22] text-white text-sm font-medium transition-colors disabled:opacity-50 border-0 border-none shadow-none outline-none"
-                >
-                  Confirm cancel
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+      <section className="rounded-[22px] border border-[#ffd5c8] bg-[#fff8f6] p-5 sm:p-7"><p className="text-xs font-semibold uppercase tracking-wider text-[#a24431]">Signs consistent with</p><h2 className="text-xl font-semibold text-[#5b1c10] mt-2">{triage?.condition_label_en || "Signs that need a clinic check"}</h2><p className="mt-3 flex gap-2 text-sm text-[#a03823]"><ShieldAlert className="size-4 mt-0.5 shrink-0" /><span>Generated by symptom rules at the outlet. <strong>This is not a diagnosis</strong> and was not shown on the patient card.</span></p></section>
+
+      <section className="rounded-[22px] border border-[#e4e8ec] bg-white p-5 sm:p-7"><p className="text-xs font-semibold uppercase tracking-wider text-[#6e8298]">Confirm the diagnosis</p><div className="grid sm:grid-cols-2 gap-2 mt-4">{CONFIRMATIONS.map((item) => <button key={item} type="button" aria-pressed={confirmation === item} onClick={() => setConfirmation(item)} className={cn("min-h-12 rounded-[12px] border px-4 py-3 text-left flex items-center justify-between gap-3", confirmation === item ? "border-[#0073f3] bg-[#f0f7ff] text-[#0051a8] ring-1 ring-[#0073f3]" : "border-[#d8e0e7]")}><span className="font-medium">{item}</span>{confirmation === item && <Check className="size-5" />}</button>)}</div><textarea value={clinicalNote} onChange={(event) => setClinicalNote(event.target.value)} rows={3} placeholder="Optional clinical note" className="mt-4 w-full rounded-[12px] border border-[#d8e0e7] px-4 py-3 outline-none focus:border-[#0073f3]" /></section>
+
+      <div className="grid sm:grid-cols-2 gap-3"><button type="button" disabled={!confirmation || transition.isPending || !isDestination} onClick={() => void saveClinicalResult()} className="min-h-12 rounded-[12px] bg-[#0073f3] px-5 text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2"><Send className="size-4" />Save and send to DHIS2</button><button type="button" disabled={!confirmation || transition.isPending || !isDestination} onClick={() => void saveClinicalResult()} className="min-h-12 rounded-[12px] border border-[#0073f3] bg-white px-5 text-[#0073f3] font-medium disabled:opacity-50">Send result back to outlet</button></div>
     </div>
   );
 }

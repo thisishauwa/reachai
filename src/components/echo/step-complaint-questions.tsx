@@ -103,6 +103,7 @@ export function StepComplaintQuestions({ area, ageBand, encounterId, caregiverRe
   const baseQuestions = questions.filter((question) => !question.bridgeFrom);
   const bridgeA7 = questions.filter((question) => question.bridgeFrom === "A7");
   const bridgeA8 = questions.filter((question) => question.bridgeFrom === "A8");
+  const bridgeF4 = questions.filter((question) => question.bridgeFrom === "F4");
 
   const setAnswer = (key: string, value: ComplaintAnswer) => setAnswers((current) => {
     const next = { ...current, [key]: value };
@@ -116,6 +117,25 @@ export function StepComplaintQuestions({ area, ageBand, encounterId, caregiverRe
       delete next.COUGH_DURATION;
       delete next.BLOOD_IN_SPUTUM;
       delete next.WEIGHT_LOSS_OR_NIGHT_SWEATS;
+    }
+    if (key === "NECK_FLEXION" && value !== "no_stiff") {
+      delete next.PHOTOPHOBIA;
+      delete next.NON_BLANCHING_SPOTS;
+      delete next.BULGING_FONTANELLE;
+    }
+    if (key === "RASH_PRESENT" && value !== "yes") {
+      delete next.RASH_START_LOCATION;
+      delete next.MEASLES_EYE_COUGH_SIGNS;
+      delete next.MEASLES_VACCINE;
+    }
+    if (
+      (key === "MALARIA_MEDICINE_NO_IMPROVEMENT" || key === "LASSA_EXPOSURE") &&
+      next.MALARIA_MEDICINE_NO_IMPROVEMENT !== "yes" &&
+      next.LASSA_EXPOSURE !== "yes"
+    ) {
+      delete next.LASSA_SORE_THROAT;
+      delete next.LASSA_FACIAL_SWELLING;
+      delete next.LASSA_CHEST_BACK_PAIN;
     }
     return next;
   });
@@ -173,6 +193,20 @@ export function StepComplaintQuestions({ area, ageBand, encounterId, caregiverRe
           <section className="rounded-[18px] border border-[#cfd8e1] bg-[#eef1f4] p-4 sm:p-6 flex flex-col gap-4">
             <div className="flex gap-3"><Link2 className="size-5 text-[#596b7c] shrink-0" /><div><p className="font-semibold text-[#354554]">A few related questions</p><p className="text-sm text-[#596b7c]">You mentioned a cough. These answers help choose the safest next step.</p><p className="text-xs text-[#596b7c] mt-1">Kun ambaci tari. Wadannan amsoshin za su taimaka wajen zabar mataki mafi aminci.</p></div></div>
             {renderQuestions(bridgeA8)}
+          </section>
+        )}
+
+        {bridgeF4.length > 0 && (
+          <section className="rounded-[18px] border border-[#cfd8e1] bg-[#eef1f4] p-4 sm:p-6 flex flex-col gap-4">
+            <div className="flex gap-3">
+              <Link2 className="size-5 text-[#596b7c] shrink-0" />
+              <div>
+                <p className="font-semibold text-[#354554]">Fever questions</p>
+                <p className="text-sm text-[#596b7c]">You mentioned fever. Continue with the complete fever question set.</p>
+                <p className="text-xs text-[#596b7c] mt-1">Kun ambaci zazzabi. Ci gaba da cikakkun tambayoyin zazzabi.</p>
+              </div>
+            </div>
+            {renderQuestions(bridgeF4)}
           </section>
         )}
       </div>

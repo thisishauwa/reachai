@@ -1,265 +1,190 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { Building2, Check, Copy, MessageSquareText, Printer, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { useSession } from "@/lib/session/session-context";
-import { createClient } from "@/lib/supabase/client";
-import { syncController } from "@/lib/offline/sync";
-import { createIdempotencyKey } from "@/lib/logic/idempotency";
-import { useDestinationFacilities } from "@/lib/queries/referrals";
-import { ReferralConsentModal } from "@/components/echo/referral-consent-modal";
-import { ReferralGeneratedSheet } from "@/components/echo/referral-generated-sheet";
 import { cn } from "@/lib/utils";
-import { Check, Building2, ChevronDown } from "lucide-react";
-import type { PrivacyMode } from "@/lib/supabase/database.types";
+import { useSession } from "@/lib/session/session-context";
+import { useDestinationFacilities } from "@/lib/queries/referrals";
+import { syncController } from "@/lib/offline/sync";
+import { createClient } from "@/lib/supabase/client";
+import { careGuidanceFor } from "@/lib/reference/referral-guidance";
+import { referralLookupUrl } from "@/lib/reference/codes";
+import { createIdempotencyKey } from "@/lib/logic/idempotency";
+import { ReferralGeneratedSheet } from "@/components/echo/referral-generated-sheet";
+import type { PrivacyMode, TriageSeverity } from "@/lib/supabase/database.types";
+
+type ReferralOutcome = "referred" | "refused" | "not_referred";
 
 interface StepReferralProps {
   encounterId: string;
   privacyMode?: PrivacyMode;
   consentId?: string | null;
-  patientName?: string;
+  referralCode: string;
+  severity: TriageSeverity;
+  conditionCode: string;
+  conditionLabel: string;
+  guidanceText: string;
+  ipcGuidance?: string | null;
   onComplete: () => void;
 }
 
-interface FacilityOption {
-  id: string;
-  name: string;
-  type?: string;
-}
+const OUTCOMES: { value: ReferralOutcome; label: string; ha: string }[] = [
+  { value: "referred", label: "Yes, referred", ha: "I, an tura" },
+  { value: "refused", label: "Yes, but the patient refused", ha: "I, amma majiyyacin ya ki" },
+  { value: "not_referred", label: "No", ha: "A'a" },
+];
 
-export function StepReferral({
-  encounterId,
-  privacyMode = "identified",
-  consentId = null,
-  patientName = "Patient",
-  onComplete,
-}: StepReferralProps) {
+const FALLBACK_DESTINATION = {
+  id: "00000000-0000-0000-0000-000000000011",
+  name: "EHA Clinic, Nassarawa",
+  code: "Jaen Road",
+  phone_e164: null,
+  address_text: "Jaen Road",
+  distance_label: "1.8 km",
+  opening_status: "Open now",
+};
+
+export function StepReferral({ encounterId, privacyMode = "anonymous", consentId = null, referralCode, severity, conditionCode, conditionLabel, guidanceText, ipcGuidance, onComplete }: StepReferralProps) {
   const queryClient = useQueryClient();
   const { activeFacility, userId } = useSession();
-  const [referralCode, setReferralCode] = useState<string | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [selectedFacilityId, setSelectedFacilityId] = useState<string>("");
+  const { data: destinationFacilities = [] } = useDestinationFacilities(activeFacility.facilityId);
+  const guidance = careGuidanceFor(conditionCode, severity);
+  const [selectedFacilityId, setSelectedFacilityId] = useState("");
   const [isOther, setIsOther] = useState(false);
   const [otherFacilityName, setOtherFacilityName] = useState("");
-  const [showFacilityPicker, setShowFacilityPicker] = useState(true);
+  const [outcome, setOutcome] = useState<ReferralOutcome | null>(null);
+  const [reason, setReason] = useState("");
+  const [showCard, setShowCard] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const { data: destinationFacilities = [] } = useDestinationFacilities(
-    activeFacility.facilityId
+  const facilityOptions = useMemo(
+    () => destinationFacilities.length > 0 ? destinationFacilities : [FALLBACK_DESTINATION],
+    [destinationFacilities],
   );
+  const resolvedSelectedFacilityId = selectedFacilityId || facilityOptions[0].id;
+  const selectedFacility = useMemo(() => facilityOptions.find((facility) => facility.id === resolvedSelectedFacilityId), [facilityOptions, resolvedSelectedFacilityId]);
+  const destinationName = isOther ? otherFacilityName.trim() || "Other facility" : selectedFacility?.name || FALLBACK_DESTINATION.name;
+  const destinationAddress = selectedFacility
+    ? `${selectedFacility.address_text || selectedFacility.code || FALLBACK_DESTINATION.address_text} · ${selectedFacility.distance_label || "Distance unavailable"} · ${selectedFacility.opening_status || "Hours unavailable"}`
+    : `${FALLBACK_DESTINATION.address_text} · ${FALLBACK_DESTINATION.distance_label} · ${FALLBACK_DESTINATION.opening_status}`;
+  const showsDestination = outcome === "referred" || outcome === "refused";
+  const canSave = Boolean(outcome) && (!showsDestination || (isOther ? otherFacilityName.trim() : resolvedSelectedFacilityId));
 
-  const resolvedFacilityId =
-    selectedFacilityId ||
-    destinationFacilities[0]?.id ||
-    "00000000-0000-0000-0000-000000000011";
-
-  const handleGenerateReferral = async (data: { referralMode: PrivacyMode }) => {
-    if (!selectedFacilityId && !isOther) {
-      toast.error("Please select a referral destination facility");
-      return;
-    }
-    if (isOther && !otherFacilityName.trim()) {
-      toast.error("Please enter the name of the referral facility");
-      return;
-    }
-
-    setIsGenerating(true);
-
-    const randomPart = Math.random().toString(36).substring(2, 7).toUpperCase();
-    const fallbackCode = `ECH-${randomPart}`;
-    const referralId = crypto.randomUUID();
-
-    const supabase = createClient();
-    let finalCode = fallbackCode;
-
-    try {
-      const { data: refResult, error: refError } = await supabase.rpc(
-        "create_referral",
-        {
-          p_encounter_id: encounterId,
-          p_destination_facility_id: resolvedFacilityId,
-          p_privacy_mode: data.referralMode,
-          p_consent_id: data.referralMode === "identified" ? consentId : null,
-          p_idempotency_key: createIdempotencyKey(),
-        }
-      );
-
-      if (!refError && refResult) {
-        finalCode = (refResult as { referral_code: string }).referral_code;
-        await queryClient.invalidateQueries({ queryKey: ["referrals"] });
-      } else {
-        console.warn("create_referral RPC note:", refError);
-        // Offline fallback — enqueue and use the local code
-        await syncController.enqueue("referral", referralId, "insert", {
-          id: referralId,
-          encounter_id: encounterId,
-          organization_id: activeFacility.organizationId,
-          destination_facility_id: resolvedFacilityId,
-          originating_facility_id: activeFacility.facilityId,
-          privacy_mode: data.referralMode,
-          consent_id: data.referralMode === "identified" ? consentId : null,
-          referral_code: fallbackCode,
-          status: "created",
-          created_by: userId,
-          // Store free-text "other" name in metadata if applicable
-          ...(isOther ? { destination_facility_name_free_text: otherFacilityName.trim() } : {}),
-        });
-      }
-    } catch (e) {
-      console.warn("create_referral exception:", e);
-      toast.error("Could not generate referral code. Please retry.", {
-        action: {
-          label: "Retry",
-          onClick: () => handleGenerateReferral(data),
-        },
-      });
-      setIsGenerating(false);
-      return;
-    }
-
-    setReferralCode(finalCode);
-    toast.success("Referral code generated");
-    setIsGenerating(false);
+  const copySmsLink = async () => {
+    const message = `Referral ${referralCode}: ${destinationName}. Go today and show this code at reception. ${referralLookupUrl(referralCode)}`;
+    await navigator.clipboard?.writeText(message);
+    toast.success("SMS text and secure link copied");
   };
 
-  if (referralCode) {
-    return (
-      <div className="w-full">
-        <ReferralGeneratedSheet
-          referralCode={referralCode}
-          onComplete={onComplete}
-        />
-      </div>
-    );
-  }
+  const saveOutcome = async () => {
+    if (!canSave || !outcome) return;
+    setSaving(true);
+    let referralId = crypto.randomUUID();
+    const destinationFacilityId = resolvedSelectedFacilityId;
+    const status = outcome === "referred" ? "created" : "cancelled";
+    const payload = {
+      id: referralId,
+      encounter_id: encounterId,
+      organization_id: activeFacility.organizationId,
+      source_facility_id: activeFacility.facilityId,
+      destination_facility_id: destinationFacilityId,
+      privacy_mode: privacyMode,
+      consent_id: privacyMode === "identified" ? consentId : null,
+      referral_code: referralCode,
+      status,
+      created_by: userId,
+      destination_facility_name_free_text: isOther ? otherFacilityName.trim() : null,
+      referral_outcome: outcome,
+      referral_outcome_reason: reason.trim() || null,
+      secure_lookup_url: referralLookupUrl(referralCode),
+    };
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase.rpc("create_referral_v03" as never, {
+        p_encounter_id: encounterId,
+        p_destination_facility_id: destinationFacilityId,
+        p_privacy_mode: privacyMode,
+        p_consent_id: privacyMode === "identified" ? consentId : null,
+        p_referral_code: referralCode,
+        p_idempotency_key: createIdempotencyKey(),
+      } as never);
+      if (error) throw error;
+      referralId = (data as { id?: string } | null)?.id || referralId;
+      payload.id = referralId;
+      await supabase.from("referrals").update({
+        referral_outcome: outcome,
+        referral_outcome_reason: reason.trim() || null,
+        destination_facility_name_free_text: isOther ? otherFacilityName.trim() : null,
+        secure_lookup_url: referralLookupUrl(referralCode),
+        ...(outcome === "referred" ? {} : { status: "cancelled", cancellation_reason: reason.trim() || outcome }),
+      } as never).eq("id", referralId);
+    } catch (error) {
+      console.warn("Referral outcome online save note:", error);
+    }
+    try {
+      await syncController.enqueue("referral", referralId, "insert", payload);
+      const outcomeAnswerId = crypto.randomUUID();
+      await syncController.enqueue("encounter_answer", outcomeAnswerId, "insert", {
+        id: outcomeAnswerId, encounter_id: encounterId, question_id: "REFERRAL_OUTCOME", value: { outcome, reason: reason.trim() || null, recommended_destination: facilityOptions[0].name, actual_destination: showsDestination ? destinationName : null }, answered_by: userId, client_updated_at: new Date().toISOString(),
+      });
+      await queryClient.invalidateQueries({ queryKey: ["referrals"] });
+      toast.success("Referral outcome saved");
+      onComplete();
+    } catch (error) {
+      console.warn("Referral outcome queue note:", error);
+      toast.error("Could not save the outcome. Please retry.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
-    <div className="w-full flex flex-col gap-6 pb-28">
-      {/* Facility Selection Card */}
-      <div className="relative w-full">
-        <div className="absolute inset-x-4 -bottom-3 h-12 bg-[#f2f3f5] rounded-[20px] -z-10" />
-        <div className="bg-[#f9f9f9] rounded-[20px] p-6 sm:p-10 flex flex-col gap-6">
-          {/* Heading */}
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[#0590f9] text-xs font-semibold uppercase tracking-wider">
-              Step 7 of 7
-            </span>
-            <h2 className="text-xl sm:text-2xl font-normal text-[#001f3e] leading-snug">
-              <span className="font-medium">Select referral</span> destination
-            </h2>
-            <p className="text-sm sm:text-base text-[#6e8298]">
-              Choose an EHA clinic or enter another facility name. — Zaɓi wurin tura mara lafiya.
-            </p>
-          </div>
+    <div className="w-full flex flex-col gap-5 pb-28">
+      <section className={cn("rounded-[20px] border p-5 sm:p-7", severity === "emergency" ? "border-[#f2c8bd] bg-[#fff5f2]" : "border-[#f0d7b1] bg-[#fffaf1]") }>
+        <p className="text-xs font-bold uppercase tracking-wider opacity-70">Step 6a · Referral</p>
+        <h2 className="text-xl sm:text-2xl font-semibold mt-1">{guidance.severityLabel}</h2>
+        <p className="text-sm mt-2 opacity-80">{guidance.severityReason}</p>
+      </section>
 
-          {/* EHA Clinic tiles */}
-          {destinationFacilities.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <label className="text-xs uppercase tracking-wider text-[#6e8298] font-medium">
-                EHA Clinics
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {destinationFacilities.map((fac) => {
-                  const sel = selectedFacilityId === fac.id && !isOther;
-                  return (
-                    <button
-                      key={fac.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedFacilityId(fac.id);
-                        setIsOther(false);
-                      }}
-                      className={cn(
-                        "w-full rounded-[14px] px-4 py-3.5 text-left text-sm sm:text-base font-medium",
-                        "flex items-center justify-between gap-3",
-                        "transition-all cursor-pointer border",
-                        sel
-                          ? "border-[#0073f3] bg-[#f0f7ff] text-[#0073f3] shadow-sm ring-1 ring-[#0073f3]"
-                          : "border-[#e4e8ec] bg-white text-[#242b33] hover:bg-[#fafafa]"
-                      )}
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <Building2 className={cn("size-4 shrink-0", sel ? "text-[#0073f3]" : "text-[#6e8298]")} />
-                        <span className={cn("leading-snug truncate", sel ? "font-semibold" : "font-normal")}>
-                          {fac.name || (fac as { facility_name?: string }).facility_name || "EHA Clinic"}
-                        </span>
-                      </div>
-                      <div
-                        className={cn(
-                          "size-5 rounded-full flex items-center justify-center shrink-0 transition-colors border",
-                          sel ? "bg-[#0073f3] border-[#0073f3] text-white" : "border-[#c7d2de] bg-white"
-                        )}
-                      >
-                        {sel && <Check className="size-3 stroke-[3]" />}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+      <section className="rounded-[20px] border border-[#d9e8f7] bg-[#f6faff] p-5 sm:p-7 flex items-center justify-between gap-4">
+        <div><p className="text-xs font-semibold uppercase tracking-wider text-[#5d7892]">Referral code</p><p className="font-mono text-3xl sm:text-4xl font-bold tracking-[0.16em] text-[#001f3e] mt-2">{referralCode}</p><p className="text-xs text-[#6e8298] mt-2">Read this aloud to the clinic and copy it onto the card.</p></div>
+        <button type="button" aria-label="Copy referral code" onClick={() => void navigator.clipboard?.writeText(referralCode)} className="size-11 rounded-[12px] bg-white border border-[#d9e8f7] text-[#0073f3] flex items-center justify-center"><Copy className="size-5" /></button>
+      </section>
 
-          {/* "Other" option */}
-          <div className="flex flex-col gap-2">
-            <label className="text-xs uppercase tracking-wider text-[#6e8298] font-medium">
-              Other Facility
-            </label>
-            <button
-              type="button"
-              onClick={() => {
-                setIsOther(true);
-                setSelectedFacilityId("");
-              }}
-              className={cn(
-                "w-full rounded-[14px] px-4 py-3.5 text-left text-sm sm:text-base font-medium",
-                "flex items-center justify-between gap-3",
-                "transition-all cursor-pointer border",
-                isOther
-                  ? "border-[#0073f3] bg-[#f0f7ff] text-[#0073f3] shadow-sm ring-1 ring-[#0073f3]"
-                  : "border-[#e4e8ec] bg-white text-[#242b33] hover:bg-[#fafafa]"
-              )}
-            >
-              <span className={cn("leading-snug", isOther ? "font-semibold" : "font-normal")}>
-                Other facility (not listed)
-              </span>
-              <div
-                className={cn(
-                  "size-5 rounded-full flex items-center justify-center shrink-0 transition-colors border",
-                  isOther ? "bg-[#0073f3] border-[#0073f3] text-white" : "border-[#c7d2de] bg-white"
-                )}
-              >
-                {isOther && <Check className="size-3 stroke-[3]" />}
-              </div>
-            </button>
+      <section className="rounded-[20px] border border-[#e4e8ec] bg-white p-5 sm:p-7">
+        <p className="text-xs font-semibold uppercase tracking-wider text-[#6e8298]">What this looks like</p><h3 className="text-lg sm:text-xl font-semibold text-[#242b33] mt-2">{conditionLabel}</h3><p className="text-sm text-[#5f7081] mt-2">{guidanceText}</p>
+        <p className="mt-3 rounded-[12px] bg-[#fff8f6] border border-[#ffd5c8] px-4 py-3 text-sm text-[#a03823] flex gap-2"><ShieldAlert className="size-4 shrink-0 mt-0.5" /><span><strong>This is not a diagnosis.</strong> A qualified health worker must confirm it.</span></p>
+      </section>
 
-            {/* Free-text input for "Other" */}
-            {isOther && (
-              <div className="flex flex-col gap-1.5 mt-1">
-                <label className="text-xs uppercase tracking-wider text-[#6e8298] font-medium">
-                  Facility name *
-                </label>
-                <input
-                  type="text"
-                  id="other-facility-input"
-                  value={otherFacilityName}
-                  onChange={(e) => setOtherFacilityName(e.target.value)}
-                  placeholder="e.g. General Hospital Kano"
-                  autoFocus
-                  className="w-full bg-white rounded-[12px] border border-[#e4e8ec] px-4 py-3.5 text-sm sm:text-base text-[#242b33] placeholder:text-[#a1aebc] outline-none focus:border-[#0073f3] focus:ring-2 focus:ring-[#0073f3]/20 transition-all"
-                />
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+      <section className="rounded-[20px] border border-[#d9e8f7] bg-[#f6faff] p-5 sm:p-7 grid sm:grid-cols-2 gap-5">
+        <div><p className="text-xs font-semibold uppercase tracking-wider text-[#356b9e]">Before transport - give</p><ul className="mt-3 space-y-2 text-sm text-[#365b7d]">{guidance.give.map((item) => <li key={item} className="flex gap-2"><Check className="size-4 mt-0.5 shrink-0" /><span>{item}</span></li>)}</ul></div>
+        <div><p className="text-xs font-semibold uppercase tracking-wider text-[#a24431]">Do not give</p><ul className="mt-3 space-y-2 text-sm text-[#7d4337]">{guidance.doNotGive.map((item) => <li key={item} className="flex gap-2"><span>•</span><span>{item}</span></li>)}</ul></div>
+      </section>
 
-      {/* Consent & Generate */}
-      <ReferralConsentModal
-        initialMode={privacyMode}
-        patientName={patientName}
-        onSubmit={handleGenerateReferral}
-        isLoading={isGenerating}
-      />
+      <section className="rounded-[20px] border border-[#ead8b9] bg-[#fffbf3] p-5 sm:p-7"><p className="text-xs font-semibold uppercase tracking-wider text-[#8a5b00]">Protect yourself and others</p><ul className="mt-3 space-y-2 text-sm text-[#694e1d]">{(ipcGuidance ? [ipcGuidance] : guidance.ipc).map((item) => <li key={item} className="flex gap-2"><ShieldAlert className="size-4 mt-0.5 shrink-0" /><span>{item}</span></li>)}</ul>{guidance.surveillanceNotice && <p className="mt-3 font-semibold text-sm text-[#a03823]">{guidance.surveillanceNotice}</p>}</section>
+
+      <section className="rounded-[20px] border border-[#e4e8ec] bg-white p-5 sm:p-7">
+        <p className="text-xs font-semibold uppercase tracking-wider text-[#6e8298]">Recommended clinic</p><div className="flex items-start gap-3 mt-3"><Building2 className="size-5 text-[#0073f3] shrink-0" /><div><h3 className="font-semibold text-[#242b33]">{facilityOptions[0].name}</h3><p className="text-sm text-[#6e8298] mt-1">{destinationAddress}</p><p className="text-sm font-medium text-[#287a39] mt-1">Nearest clinic able to treat this. The clinic notification is sent when you save the referral.</p></div></div>
+      </section>
+
+      <section className="rounded-[20px] bg-[#001f3e] p-5 sm:p-7 text-white"><p className="text-xs font-semibold uppercase tracking-wider text-[#9ccaff]">Say to the patient</p><p className="text-base sm:text-lg leading-relaxed mt-3">“{guidance.patientScript}”</p></section>
+
+      <div className="grid grid-cols-2 gap-3"><button type="button" onClick={() => setShowCard(true)} className="min-h-11 rounded-[12px] border border-[#c7d2de] bg-white text-[#244b70] font-medium flex items-center justify-center gap-2"><Printer className="size-4" />Print card</button><button type="button" onClick={() => void copySmsLink()} className="min-h-11 rounded-[12px] border border-[#c7d2de] bg-white text-[#244b70] font-medium flex items-center justify-center gap-2"><MessageSquareText className="size-4" />Send SMS link</button></div>
+
+      <section className="rounded-[20px] border border-[#e4e8ec] bg-white p-5 sm:p-7 flex flex-col gap-5">
+        <div><p className="text-xs font-semibold uppercase tracking-wider text-[#6e8298]">Referral outcome</p><h3 className="text-lg font-semibold text-[#242b33] mt-1">Did you refer this patient?</h3></div>
+        <div className="grid gap-2">{OUTCOMES.map((item) => <button key={item.value} type="button" aria-pressed={outcome === item.value} onClick={() => { setOutcome(item.value); setReason(""); }} className={cn("min-h-12 rounded-[12px] border px-4 py-3 text-left flex items-center justify-between gap-3", outcome === item.value ? "border-[#0073f3] bg-[#f0f7ff] text-[#0051a8] ring-1 ring-[#0073f3]" : "border-[#d8e0e7] bg-white text-[#242b33]")}><span><span className="font-medium">{item.label}</span><span className="block text-xs opacity-70">{item.ha}</span></span>{outcome === item.value && <Check className="size-5" />}</button>)}</div>
+
+        {showsDestination && <div className="flex flex-col gap-3"><div><p className="text-sm font-semibold text-[#242b33]">Referred to</p><p className="text-xs text-[#6e8298]">The recommended clinic is selected. Change it only if the patient was sent elsewhere.</p></div><div className="grid sm:grid-cols-2 gap-2">{facilityOptions.map((facility) => <button key={facility.id} type="button" onClick={() => { setSelectedFacilityId(facility.id); setIsOther(false); }} className={cn("min-h-11 rounded-[12px] border px-3 py-2 text-left text-sm", resolvedSelectedFacilityId === facility.id && !isOther ? "border-[#0073f3] bg-[#f0f7ff] text-[#0051a8]" : "border-[#d8e0e7]")}>{facility.name}</button>)}<button type="button" onClick={() => { setIsOther(true); setSelectedFacilityId(""); }} className={cn("min-h-11 rounded-[12px] border px-3 py-2 text-left text-sm", isOther ? "border-[#0073f3] bg-[#f0f7ff] text-[#0051a8]" : "border-[#d8e0e7]")}>Other facility</button></div>{isOther && <input value={otherFacilityName} onChange={(event) => setOtherFacilityName(event.target.value)} placeholder="Facility name" className="min-h-11 rounded-[12px] border border-[#d8e0e7] px-4 outline-none focus:border-[#0073f3]" />}</div>}
+
+        {(outcome === "refused" || outcome === "not_referred") && <div><label htmlFor="referral-reason" className="text-sm font-semibold text-[#242b33]">Reason - optional</label><textarea id="referral-reason" value={reason} onChange={(event) => setReason(event.target.value)} rows={3} placeholder={outcome === "refused" ? "For example: no transport money or children at home" : "Why was the recommendation not followed?"} className="mt-2 w-full rounded-[12px] border border-[#d8e0e7] px-4 py-3 outline-none focus:border-[#0073f3]" /><p className="text-xs text-[#6e8298] mt-1">You can leave this blank. It helps us understand why referrals do not happen.</p></div>}
+      </section>
+
+      <div className="encounter-action-bar"><button type="button" disabled={!canSave || saving} onClick={() => void saveOutcome()} className="w-full min-h-12 rounded-[12px] bg-[#0073f3] px-6 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed">{saving ? "Saving..." : "Save and finish"}</button></div>
+
+      {showCard && <ReferralGeneratedSheet referralCode={referralCode} destinationName={destinationName} destinationAddress={destinationAddress.split(" · ")[0]} createdAt={new Date().toISOString()} onClose={() => setShowCard(false)} onComplete={() => { window.print(); }} />}
     </div>
   );
 }

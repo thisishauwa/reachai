@@ -296,7 +296,7 @@ export function evaluateComplaintTriage(
   }
 
   const measlesPattern =
-    answerEquals(answers, "FEVER_PRESENT", "yes") &&
+    (answerEquals(answers, "FEVER_PRESENT", "yes") || typeof answers.FEVER_DURATION === "string") &&
     answerEquals(answers, "RASH_START_LOCATION", "face_or_behind_ears") &&
     answerEquals(answers, "MEASLES_EYE_COUGH_SIGNS", "yes");
   if (measlesPattern) {
@@ -310,7 +310,13 @@ export function evaluateComplaintTriage(
     });
   }
 
-  const lassaIndicators = ["MALARIA_MEDICINE_NO_IMPROVEMENT", "LASSA_EXPOSURE"].filter((key) => answerEquals(answers, key, "yes")).length;
+  const lassaIndicators = [
+    "MALARIA_MEDICINE_NO_IMPROVEMENT",
+    "LASSA_EXPOSURE",
+    "LASSA_SORE_THROAT",
+    "LASSA_FACIAL_SWELLING",
+    "LASSA_CHEST_BACK_PAIN",
+  ].filter((key) => answerEquals(answers, key, "yes")).length;
   if (durationIsThreeOrMore(answers) && lassaIndicators >= 2) {
     add({
       code: "LASSA_VHF_PATTERN",

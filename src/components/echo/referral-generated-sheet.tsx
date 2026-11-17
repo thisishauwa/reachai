@@ -4,9 +4,12 @@ import { useEffect, useState } from "react";
 import { X, Copy, Check } from "lucide-react";
 import QRCode from "qrcode";
 import { toast } from "sonner";
+import { referralLookupUrl } from "@/lib/reference/codes";
 
 interface ReferralGeneratedSheetProps {
   referralCode: string;
+  destinationName: string;
+  destinationAddress: string;
   createdAt?: string;
   onClose?: () => void;
   onComplete: () => void;
@@ -14,16 +17,19 @@ interface ReferralGeneratedSheetProps {
 
 export function ReferralGeneratedSheet({
   referralCode,
+  destinationName,
+  destinationAddress,
   createdAt,
   onClose,
   onComplete,
 }: ReferralGeneratedSheetProps) {
   const [qrUrl, setQrUrl] = useState<string>("");
   const [copied, setCopied] = useState(false);
+  const [issuedAt] = useState(() => createdAt || new Date().toISOString());
 
   useEffect(() => {
     if (referralCode) {
-      QRCode.toDataURL(referralCode, {
+      QRCode.toDataURL(referralLookupUrl(referralCode), {
         width: 180,
         margin: 1,
         color: {
@@ -45,9 +51,7 @@ export function ReferralGeneratedSheet({
     }
   };
 
-  const formattedDate =
-    createdAt ||
-    new Date().toLocaleDateString("en-GB", {
+  const formattedDate = new Date(issuedAt).toLocaleString("en-GB", {
       day: "2-digit",
       month: "long",
       year: "numeric",
@@ -62,10 +66,10 @@ export function ReferralGeneratedSheet({
         <div className="flex items-start justify-between">
           <div className="flex flex-col gap-0.5">
             <h2 className="text-xl sm:text-2xl font-semibold text-[#121619]">
-              Referral Generated
+              Referral card · IDSR-light Kano
             </h2>
             <p className="text-sm sm:text-base text-[#6e8298]">
-              An Samar da Takardar Turawa
+              Takardar tura mara lafiya
             </p>
           </div>
           {onClose && (
@@ -108,12 +112,17 @@ export function ReferralGeneratedSheet({
           </div>
           <div className="flex flex-col items-center gap-0.5 text-center">
             <p className="font-semibold text-sm sm:text-base text-[#242b33]">
-              Show this code at the REACH Clinic
+              {destinationName}
             </p>
             <p className="text-xs sm:text-sm text-[#6e8298]">
-              Nuna wannan lambar a asibitin REACH
+              {destinationAddress}
             </p>
           </div>
+        </div>
+
+        <div className="rounded-[14px] border border-[#e4e8ec] px-4 py-3 text-center">
+          <p className="font-semibold text-[#242b33]">Go today. Show this at reception.</p>
+          <p className="text-sm text-[#6e8298] mt-1">Je asibiti yau. Nuna wannan a tebur.</p>
         </div>
 
         {/* Referral Code Card */}
@@ -146,7 +155,7 @@ export function ReferralGeneratedSheet({
           onClick={onComplete}
           className="w-full py-3.5 sm:py-4 rounded-[12px] bg-[#0073f3] hover:bg-[#0060cb] text-white font-medium text-base transition-colors cursor-pointer"
         >
-          Complete assessment
+          Print card
         </button>
       </div>
     </div>

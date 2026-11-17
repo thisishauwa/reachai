@@ -12,6 +12,7 @@ import {
   generateEncounterCode,
   generateSessionCode,
   generatePatientCode,
+  generateReferralCode,
 } from "@/lib/reference/codes";
 import { useActiveConsentText } from "@/lib/queries/reference";
 import { EncounterHeader } from "@/components/echo/encounter-header";
@@ -46,6 +47,7 @@ import type {
   ComplaintAreaCode,
 } from "@/lib/reference/complaint-questions";
 import { complaintAreaForL8Answers } from "@/lib/reference/look-check";
+import { useDestinationFacilities } from "@/lib/queries/referrals";
 
 // Flow order per spec v0.3 / walkthrough v0.4 (AIR-794):
 // request → presence + age → look-check
@@ -111,9 +113,12 @@ interface EchoEncounterState {
   answers: Record<string, unknown>;
   triageOutcomeId: string | null;
   triageSeverity: TriageSeverity | null;
+  triageConditionCode: string | null;
+  triageConditionLabel: string | null;
   triageGuidanceEn: string | null;
   triageIpcGuidanceEn: string | null;
   referralRequired: boolean;
+  referralCode: string | null;
 }
 
 const INITIAL_STATE: EchoEncounterState = {
@@ -145,15 +150,19 @@ const INITIAL_STATE: EchoEncounterState = {
   answers: {},
   triageOutcomeId: null,
   triageSeverity: null,
+  triageConditionCode: null,
+  triageConditionLabel: null,
   triageGuidanceEn: null,
   triageIpcGuidanceEn: null,
   referralRequired: false,
+  referralCode: null,
 };
 
 export default function NewEchoEncounterPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { activeFacility, userId } = useSession();
+  const { data: destinationFacilities = [] } = useDestinationFacilities(activeFacility.facilityId);
   const { setHasEncounterToday } = useZeroReport();
   const [state, setState] = useState<EchoEncounterState>(INITIAL_STATE);
   const [encounterCode] = useState(() => generateEncounterCode());
@@ -267,6 +276,7 @@ export default function NewEchoEncounterPage() {
         syndromeIds: result.syndromeId ? [result.syndromeId] : [],
         syndromeLabels: result.syndromeLabel ? [result.syndromeLabel] : [],
         answers: { ...result.answers, CAREGIVER_REPORTED: result.caregiverReported },
+        referralCode: s.referralCode ?? generateReferralCode(activeFacility.facilityCode),
         step: "emergency",
       }));
     }
@@ -623,6 +633,9 @@ export default function NewEchoEncounterPage() {
         <StepEmergency
           primarySignCode={state.primaryDangerSignCode}
           caregiverReported={state.caregiverReported}
+          referralCode={state.referralCode ?? generateReferralCode(activeFacility.facilityCode)}
+          destinationName={destinationFacilities[0]?.name || "EHA Clinic, Nassarawa"}
+          destinationPhone={destinationFacilities[0]?.phone_e164}
           onPrevious={() => setState((s) => ({ ...s, step: "syndrome" }))}
           onComplete={(questionSetId, emergencyAnswers) =>
             setState((s) => ({
@@ -664,10 +677,6 @@ export default function NewEchoEncounterPage() {
           onContinue={(area) =>
             setState((s) => ({
               ...s,
-              complaintAnswers:
-                s.complaintArea && s.complaintArea !== area
-                  ? {}
-                  : s.complaintAnswers,
               complaintArea: area,
               step: "complaint_questions",
             }))
@@ -714,9 +723,12 @@ export default function NewEchoEncounterPage() {
                 ...s,
                 triageOutcomeId: outcome.id,
                 triageSeverity: outcome.severity,
+                triageConditionCode: outcome.conditionCode,
+                triageConditionLabel: outcome.conditionLabel,
                 triageGuidanceEn: outcome.guidanceEn,
                 triageIpcGuidanceEn: outcome.ipcGuidanceEn,
                 referralRequired: true,
+                referralCode: s.referralCode ?? generateReferralCode(activeFacility.facilityCode),
                 step: "referral",
               }));
             } else {
@@ -726,6 +738,8 @@ export default function NewEchoEncounterPage() {
                 ...s,
                 triageOutcomeId: outcome.id,
                 triageSeverity: outcome.severity,
+                triageConditionCode: outcome.conditionCode,
+                triageConditionLabel: outcome.conditionLabel,
                 triageGuidanceEn: outcome.guidanceEn,
                 triageIpcGuidanceEn: outcome.ipcGuidanceEn,
                 referralRequired: false,
@@ -742,7 +756,12 @@ export default function NewEchoEncounterPage() {
           encounterId={state.encounterId}
           privacyMode={state.privacyMode}
           consentId={state.consentId}
-          patientName={state.patientName ?? undefined}
+          referralCode={state.referralCode ?? generateReferralCode(activeFacility.facilityCode)}
+          severity={state.triageSeverity ?? "urgent"}
+          conditionCode={state.triageConditionCode ?? "UNCLASSIFIED"}
+          conditionLabel={state.triageConditionLabel ?? "Signs that need a clinic check"}
+          guidanceText={state.triageGuidanceEn ?? "The recorded signs need a clinic assessment."}
+          ipcGuidance={state.triageIpcGuidanceEn}
           onComplete={() => {
             void completeEncounter(state.encounterId!);
             setState((s) => ({ ...s, step: "complete" }));

@@ -20,3 +20,33 @@ export function generateSessionCode(): string {
 export function generatePatientCode(): string {
   return `PAT-${randomBase32(6)}`;
 }
+
+const REFERRAL_ALPHABET = "ABCDEFGHJKLMNPRSTVWXYZ";
+const REFERRAL_BLOCKLIST = new Set(["ASS", "BAD", "DIE", "SEX"]);
+
+function referralLetters(length: number): string {
+  let value = "";
+  for (let index = 0; index < length; index += 1) {
+    value += REFERRAL_ALPHABET[Math.floor(Math.random() * REFERRAL_ALPHABET.length)];
+  }
+  return value;
+}
+
+/** v0.3 referral format: outlet pair + three pronounceable, unambiguous letters. */
+export function generateReferralCode(outletCode?: string): string {
+  const cleanedOutlet = (outletCode ?? "BK")
+    .toUpperCase()
+    .replace(/[^A-Z]/g, "")
+    .replace(/[IOQU]/g, "")
+    .slice(0, 2);
+  const prefix = cleanedOutlet.length === 2 ? cleanedOutlet : "BK";
+  let suffix = referralLetters(3);
+  while (REFERRAL_BLOCKLIST.has(suffix)) suffix = referralLetters(3);
+  return `${prefix}-${suffix}`;
+}
+
+/** The QR contains a signed lookup URL, never the clinical payload or plain code alone. */
+export function referralLookupUrl(code: string): string {
+  const signature = Array.from(code).reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) >>> 0, 2166136261).toString(36);
+  return `https://idsr.ng/r/${encodeURIComponent(code)}?sig=${signature}`;
+}

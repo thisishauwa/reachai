@@ -317,6 +317,33 @@ describe("evaluateMultiSyndromeTriage", () => {
     expect(outcome.conditionCode).toContain("CHOLERA_PATTERN");
     expect(outcome.conditionCode).toContain("TYPHOID_PATTERN");
   });
+
+  it("matches the full Set A measles rule when the conditional rash questions fire", () => {
+    const outcome = evaluateMultiSyndromeTriage([], {
+      COMPLAINT_AREA: "A",
+      FEVER_DURATION: "3_6_days",
+      RASH_PRESENT: "yes",
+      RASH_START_LOCATION: "face_or_behind_ears",
+      MEASLES_EYE_COUGH_SIGNS: "yes",
+      COUGH_PRESENT: "no",
+    }, ["COMPLAINT_A"]);
+    expect(outcome.conditionCode).toContain("MEASLES_PATTERN");
+    expect(outcome.severity).toBe("urgent");
+  });
+
+  it("matches the full Lassa rule using all five specified indicators", () => {
+    const outcome = evaluateMultiSyndromeTriage([], {
+      COMPLAINT_AREA: "A",
+      FEVER_DURATION: "3_6_days",
+      MALARIA_MEDICINE_NO_IMPROVEMENT: "yes",
+      LASSA_EXPOSURE: "no",
+      LASSA_SORE_THROAT: "yes",
+      LASSA_FACIAL_SWELLING: "no",
+      LASSA_CHEST_BACK_PAIN: "no",
+    }, ["COMPLAINT_A"]);
+    expect(outcome.conditionCode).toContain("LASSA_VHF_PATTERN");
+    expect(outcome.referralRequired).toBe(true);
+  });
 });
 
 describe("getFollowUpQuestions (Hardcoded Symptom Questions)", () => {

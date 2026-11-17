@@ -36,6 +36,8 @@ export function StepTriage({
     id: string;
     severity: TriageSeverity;
     referralRequired: boolean;
+    conditionCode: string;
+    conditionLabel: string;
     guidanceEn: string | null;
     ipcGuidanceEn: string | null;
   }) => void;
@@ -233,6 +235,8 @@ export function StepTriage({
       id: outcome.id,
       severity: outcome.severity,
       referralRequired,
+      conditionCode: outcome.condition_code || "UNCLASSIFIED",
+      conditionLabel: outcome.condition_label_en || "Signs that need a clinic check",
       guidanceEn: outcome.guidance_en,
       ipcGuidanceEn: outcome.ipc_guidance_en,
     });
@@ -242,6 +246,7 @@ export function StepTriage({
     <div className="w-full flex flex-col gap-6">
       <TriageBottomSheet
         severity={outcome.severity}
+        conditionCode={outcome.condition_code || "UNCLASSIFIED"}
         conditionLabel={outcome.condition_label_en || "Clinical Assessment"}
         guidanceText={outcome.guidance_en || ""}
         ipcGuidance={outcome.ipc_guidance_en}
