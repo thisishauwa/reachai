@@ -59,7 +59,7 @@ not add it to any client-reachable code.
    Supabase Studio (`http://127.0.0.1:54323` → Authentication → Users → Add
    user). Note the generated user UUID.
 2. Link that user to a demo facility (the seed already created a demo
-   organization and two facilities: `PHC-DEMO` and `GH-DEMO`) by running in
+   organization, `PHC-DEMO`, and the four configured REACH referral clinics) by running in
    the Studio SQL editor or `psql`:
 
    ```sql
@@ -73,7 +73,7 @@ not add it to any client-reachable code.
    ```
 
    To test the referral destination side, add a second membership at
-   `GH-DEMO` (`00000000-0000-0000-0000-000000000011`) with role
+   `REACH-GYADI` (`00000000-0000-0000-0000-000000000011`) with role
    `referral_clinician`, or create a second user for that facility.
 
 3. Sign in at `/login`.

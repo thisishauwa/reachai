@@ -14,6 +14,7 @@ import {
   generatePatientCode,
   generateReferralCode,
 } from "@/lib/reference/codes";
+import { REFERRAL_FACILITIES } from "@/lib/reference/referral-facilities";
 import { useActiveConsentText } from "@/lib/queries/reference";
 import { EncounterHeader } from "@/components/echo/encounter-header";
 import { StepRequest, type RequestData } from "@/components/echo/step-request";
@@ -634,8 +635,8 @@ export default function NewEchoEncounterPage() {
           primarySignCode={state.primaryDangerSignCode}
           caregiverReported={state.caregiverReported}
           referralCode={state.referralCode ?? generateReferralCode(activeFacility.facilityCode)}
-          destinationName={destinationFacilities[0]?.name || "EHA Clinic, Nassarawa"}
-          destinationPhone={destinationFacilities[0]?.phone_e164}
+          destinationName={destinationFacilities[0]?.name || REFERRAL_FACILITIES[0].name}
+          destinationPhone={destinationFacilities[0]?.phone_e164 || REFERRAL_FACILITIES[0].phone_e164}
           onPrevious={() => setState((s) => ({ ...s, step: "syndrome" }))}
           onComplete={(questionSetId, emergencyAnswers) =>
             setState((s) => ({

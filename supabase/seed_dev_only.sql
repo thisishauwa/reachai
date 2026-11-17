@@ -2,7 +2,7 @@
 -- This file is intentionally separate from seed_reference_data.sql.
 --
 -- It seeds:
---   1. A demo organization and two facilities (source + referral destination)
+--   1. A demo organization, source facility and four referral destinations
 --      so the app is usable end to end on a fresh local database.
 --   2. Versioned consent text (English/Hausa) for anonymous and identified
 --      screening -- placeholder copy only, NOT reviewed legal/consent
@@ -23,8 +23,11 @@ on conflict (id) do nothing;
 insert into public.facilities (id, organization_id, name, code, facility_type, is_active)
 values
   ('00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-000000000001', 'Demo Primary Health Centre', 'PHC-DEMO', 'primary_health_centre', true),
-  ('00000000-0000-0000-0000-000000000011', '00000000-0000-0000-0000-000000000001', 'Demo General Hospital', 'GH-DEMO', 'general_hospital', true)
-on conflict (id) do nothing;
+  ('00000000-0000-0000-0000-000000000011', '00000000-0000-0000-0000-000000000001', 'REACH Clinic, Gyadi-gyadi', 'REACH-GYADI', 'referral_clinic', true),
+  ('00000000-0000-0000-0000-000000000012', '00000000-0000-0000-0000-000000000001', 'REACH Clinic, Kuje', 'REACH-KUJE', 'referral_clinic', true),
+  ('00000000-0000-0000-0000-000000000013', '00000000-0000-0000-0000-000000000001', 'REACH eDokta Clinic, Tofa', 'REACH-TOFA', 'referral_clinic', true),
+  ('00000000-0000-0000-0000-000000000014', '00000000-0000-0000-0000-000000000001', 'Sen. Oluremi Tinubu Clinic', 'SOT-CLINIC', 'referral_clinic', true)
+on conflict (id) do update set name = excluded.name, code = excluded.code, facility_type = excluded.facility_type, is_active = true;
 
 -- After creating your first user via Supabase Auth (sign up through the app,
 -- or `supabase auth admin` / Studio), link it to a facility with:

@@ -5,6 +5,35 @@ alter table public.facilities
   add column if not exists distance_label text,
   add column if not exists opening_status text;
 
+-- Referral directory supplied for the Kano/Abuja REACH pilot. The demo
+-- organization guard keeps this migration safe in installations that use a
+-- different tenant and manage their facility directory separately.
+insert into public.facilities (
+  id, organization_id, name, code, facility_type, address_text, is_active
+)
+select
+  seed.id::uuid,
+  organization.id,
+  seed.name,
+  seed.code,
+  'referral_clinic',
+  seed.address_text,
+  true
+from public.organizations organization
+cross join (values
+  ('00000000-0000-0000-0000-000000000011', 'REACH Clinic, Gyadi-gyadi', 'REACH-GYADI', 'Gyadi-gyadi, Kano'),
+  ('00000000-0000-0000-0000-000000000012', 'REACH Clinic, Kuje', 'REACH-KUJE', 'Kuje, Abuja'),
+  ('00000000-0000-0000-0000-000000000013', 'REACH eDokta Clinic, Tofa', 'REACH-TOFA', 'Yanoko, Tofa'),
+  ('00000000-0000-0000-0000-000000000014', 'Sen. Oluremi Tinubu Clinic', 'SOT-CLINIC', null)
+) as seed(id, name, code, address_text)
+where organization.id = '00000000-0000-0000-0000-000000000001'
+on conflict (id) do update set
+  name = excluded.name,
+  code = excluded.code,
+  facility_type = excluded.facility_type,
+  address_text = excluded.address_text,
+  is_active = true;
+
 alter table public.referrals
   add column if not exists referral_outcome text
     check (referral_outcome in ('referred', 'refused', 'not_referred')),

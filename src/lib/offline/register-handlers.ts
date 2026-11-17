@@ -8,6 +8,10 @@ import type {
   PrivacyMode,
   ReferralStatus,
 } from "@/lib/supabase/database.types";
+import {
+  REFERRAL_FACILITIES,
+  REFERRAL_FACILITY_CODES,
+} from "@/lib/reference/referral-facilities";
 
 /**
  * Maps outbox entity types that are plain table upserts to their table name
@@ -287,15 +291,17 @@ export function registerOutboxHandlers() {
     if (!destinationFacilityId || destinationFacilityId === sourceFacilityId) {
       const { data: otherFacilities } = await supabase
         .from("facilities")
-        .select("id")
+        .select("id, code")
         .neq("id", sourceFacilityId || "")
         .eq("is_active", true)
-        .limit(1);
+        .in("code", REFERRAL_FACILITY_CODES);
 
       if (otherFacilities && otherFacilities[0]?.id) {
-        destinationFacilityId = otherFacilities[0].id;
+        destinationFacilityId = otherFacilities.sort(
+          (left, right) => REFERRAL_FACILITY_CODES.indexOf(left.code) - REFERRAL_FACILITY_CODES.indexOf(right.code),
+        )[0].id;
       } else {
-        destinationFacilityId = "00000000-0000-0000-0000-000000000011";
+        destinationFacilityId = REFERRAL_FACILITIES[0].id;
       }
     }
 

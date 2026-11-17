@@ -11,6 +11,7 @@ import { syncController } from "@/lib/offline/sync";
 import { createClient } from "@/lib/supabase/client";
 import { careGuidanceFor } from "@/lib/reference/referral-guidance";
 import { referralLookupUrl } from "@/lib/reference/codes";
+import { REFERRAL_FACILITIES } from "@/lib/reference/referral-facilities";
 import { createIdempotencyKey } from "@/lib/logic/idempotency";
 import { ReferralGeneratedSheet } from "@/components/echo/referral-generated-sheet";
 import type { PrivacyMode, TriageSeverity } from "@/lib/supabase/database.types";
@@ -36,16 +37,6 @@ const OUTCOMES: { value: ReferralOutcome; label: string; ha: string }[] = [
   { value: "not_referred", label: "No", ha: "A'a" },
 ];
 
-const FALLBACK_DESTINATION = {
-  id: "00000000-0000-0000-0000-000000000011",
-  name: "EHA Clinic, Nassarawa",
-  code: "Jaen Road",
-  phone_e164: null,
-  address_text: "Jaen Road",
-  distance_label: "1.8 km",
-  opening_status: "Open now",
-};
-
 export function StepReferral({ encounterId, privacyMode = "anonymous", consentId = null, referralCode, severity, conditionCode, conditionLabel, guidanceText, ipcGuidance, onComplete }: StepReferralProps) {
   const queryClient = useQueryClient();
   const { activeFacility, userId } = useSession();
@@ -60,15 +51,15 @@ export function StepReferral({ encounterId, privacyMode = "anonymous", consentId
   const [saving, setSaving] = useState(false);
 
   const facilityOptions = useMemo(
-    () => destinationFacilities.length > 0 ? destinationFacilities : [FALLBACK_DESTINATION],
+    () => destinationFacilities.length > 0 ? destinationFacilities : REFERRAL_FACILITIES,
     [destinationFacilities],
   );
   const resolvedSelectedFacilityId = selectedFacilityId || facilityOptions[0].id;
   const selectedFacility = useMemo(() => facilityOptions.find((facility) => facility.id === resolvedSelectedFacilityId), [facilityOptions, resolvedSelectedFacilityId]);
-  const destinationName = isOther ? otherFacilityName.trim() || "Other facility" : selectedFacility?.name || FALLBACK_DESTINATION.name;
+  const destinationName = isOther ? otherFacilityName.trim() || "Other facility" : selectedFacility?.name || REFERRAL_FACILITIES[0].name;
   const destinationAddress = selectedFacility
-    ? `${selectedFacility.address_text || selectedFacility.code || FALLBACK_DESTINATION.address_text} · ${selectedFacility.distance_label || "Distance unavailable"} · ${selectedFacility.opening_status || "Hours unavailable"}`
-    : `${FALLBACK_DESTINATION.address_text} · ${FALLBACK_DESTINATION.distance_label} · ${FALLBACK_DESTINATION.opening_status}`;
+    ? `${selectedFacility.address_text || "Address not provided"} · ${selectedFacility.distance_label || "Distance unavailable"} · ${selectedFacility.opening_status || "Hours unavailable"}`
+    : "Address not provided · Distance unavailable · Hours unavailable";
   const showsDestination = outcome === "referred" || outcome === "refused";
   const canSave = Boolean(outcome) && (!showsDestination || (isOther ? otherFacilityName.trim() : resolvedSelectedFacilityId));
 

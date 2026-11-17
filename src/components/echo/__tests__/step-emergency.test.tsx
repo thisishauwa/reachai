@@ -10,7 +10,7 @@ describe("StepEmergency", () => {
         primarySignCode="L8"
         caregiverReported={false}
         referralCode="BK-TRN"
-        destinationName="EHA Clinic, Nassarawa"
+        destinationName="REACH Clinic, Gyadi-gyadi"
         destinationPhone="+2348012345678"
         onComplete={onComplete}
       />,
@@ -35,7 +35,7 @@ describe("StepEmergency", () => {
   });
 
   it("never invents a clinic phone number when the directory has none", () => {
-    render(<StepEmergency primarySignCode="L8" caregiverReported={false} referralCode="BK-TRN" destinationName="EHA Clinic, Nassarawa" onComplete={vi.fn()} />);
+    render(<StepEmergency primarySignCode="L8" caregiverReported={false} referralCode="BK-TRN" destinationName="REACH Clinic, Gyadi-gyadi" onComplete={vi.fn()} />);
     expect(screen.queryByRole("link", { name: /Call the clinic/i })).not.toBeInTheDocument();
     expect(screen.getByLabelText("Clinic phone number unavailable")).toBeInTheDocument();
   });
@@ -50,13 +50,13 @@ describe("StepEmergency", () => {
     ["L7", ["E21", "E22", "E23", "E24"], /cord cut with a clean blade/i],
     ["L8", ["E25", "E26", "E27"], /is there fever/i],
   ])("renders the exact in-scope question set for %s", (sign, ids, firstPrompt) => {
-    render(<StepEmergency primarySignCode={sign} caregiverReported={false} referralCode="BK-TRN" destinationName="EHA Clinic, Nassarawa" onComplete={vi.fn()} />);
+    render(<StepEmergency primarySignCode={sign} caregiverReported={false} referralCode="BK-TRN" destinationName="REACH Clinic, Gyadi-gyadi" onComplete={vi.fn()} />);
     ids.forEach((id) => expect(screen.getByText(id)).toBeInTheDocument());
     expect(screen.getAllByText(firstPrompt)).toHaveLength(2);
   });
 
   it("allows Don't know throughout the absent Journey 2 bleeding set", () => {
-    render(<StepEmergency primarySignCode="L3" caregiverReported referralCode="BK-TRN" destinationName="EHA Clinic, Nassarawa" onComplete={vi.fn()} />);
+    render(<StepEmergency primarySignCode="L3" caregiverReported referralCode="BK-TRN" destinationName="REACH Clinic, Gyadi-gyadi" onComplete={vi.fn()} />);
     screen.getAllByRole("group").forEach((group) => {
       expect(within(group).getByRole("button", { name: /^Don't know/ })).toBeInTheDocument();
     });

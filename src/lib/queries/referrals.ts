@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { createIdempotencyKey } from "@/lib/logic/idempotency";
+import { REFERRAL_FACILITY_CODES } from "@/lib/reference/referral-facilities";
 import type {
   PrivacyMode,
   ReferralStatus,
@@ -181,9 +182,12 @@ export function useDestinationFacilities(excludeFacilityId: string) {
         .from("facilities")
         .select("id, name, code, phone_e164, address_text, distance_label, opening_status")
         .eq("is_active", true)
+        .in("code", REFERRAL_FACILITY_CODES)
         .neq("id", excludeFacilityId);
       if (error) throw error;
-      return data;
+      return data.sort(
+        (left, right) => REFERRAL_FACILITY_CODES.indexOf(left.code) - REFERRAL_FACILITY_CODES.indexOf(right.code),
+      );
     },
   });
 }

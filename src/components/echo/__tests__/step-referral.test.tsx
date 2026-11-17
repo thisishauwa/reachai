@@ -10,7 +10,7 @@ vi.mock("@/lib/session/session-context", () => ({
   }),
 }));
 vi.mock("@/lib/queries/referrals", () => ({
-  useDestinationFacilities: () => ({ data: [{ id: "clinic-1", name: "EHA Clinic, Nassarawa", code: "Jaen Road" }] }),
+  useDestinationFacilities: () => ({ data: [{ id: "clinic-1", name: "REACH Clinic, Gyadi-gyadi", code: "REACH-GYADI", address_text: "Gyadi-gyadi, Kano" }] }),
 }));
 vi.mock("@/lib/offline/sync", () => ({ syncController: { enqueue: vi.fn().mockResolvedValue(undefined) } }));
 vi.mock("@/lib/supabase/client", () => ({ createClient: () => ({ from: () => ({ upsert: vi.fn().mockResolvedValue({ error: null }) }) }) }));
@@ -37,6 +37,7 @@ describe("StepReferral", () => {
       previous = position;
     }
     expect(screen.getByText("BK-TRN")).toBeInTheDocument();
+    expect(screen.getByText("REACH Clinic, Gyadi-gyadi")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Print card/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Send SMS link/i })).toBeInTheDocument();
   });
