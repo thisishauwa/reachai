@@ -53,6 +53,17 @@ describe("StepReferral", () => {
     expect(screen.getByRole("button", { name: /Send SMS link/i })).toBeInTheDocument();
   });
 
+  it("limits referral destinations to the four approved facilities", () => {
+    render(<StepReferral {...baseProps} />);
+    fireEvent.click(screen.getByRole("button", { name: /Yes, referred/i }));
+
+    expect(screen.getByRole("button", { name: /REACH Clinic, Gyadi-gyadi/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /REACH Clinic, Kuje/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /REACH eDokta Clinic, Tofa/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Sen\. Oluremi Tinubu Clinic/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Other facility/i })).not.toBeInTheDocument();
+  });
+
   it("shows the optional reason and retains destination for a refused referral", () => {
     render(<StepReferral {...baseProps} />);
     fireEvent.click(screen.getByRole("button", { name: /Yes, but the patient refused/i }));
