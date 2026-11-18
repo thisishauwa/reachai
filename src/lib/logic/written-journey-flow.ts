@@ -7,15 +7,6 @@ export type WrittenJourneyStep =
 
 export type ReferralOutcomeChoice = "referred" | "refused" | "not_referred";
 
-/**
- * Journey 1 records the complaint area after the jaundice refer-now branch,
- * but does not run the normal complaint question set. Journey 11 (L8) is the
- * separate documented exception that routes into a normal set.
- */
-export function needsPostEmergencyComplaint(primaryDangerSignCode: string | null): boolean {
-  return primaryDangerSignCode === "L5";
-}
-
 export function nextStepAfterDetails(input: {
   primaryDangerSignCode: string | null;
   hasDangerSign: boolean;
@@ -23,9 +14,6 @@ export function nextStepAfterDetails(input: {
 }): WrittenJourneyStep {
   if (input.primaryDangerSignCode === "L8" && input.complaintAreaCaptured) {
     return "complaint_questions";
-  }
-  if (needsPostEmergencyComplaint(input.primaryDangerSignCode) && !input.complaintAreaCaptured) {
-    return "complaint";
   }
   if (input.hasDangerSign) return "triage";
   return "complaint";

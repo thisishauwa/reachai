@@ -50,7 +50,6 @@ import type {
 import { complaintAreaForL8Answers } from "@/lib/reference/look-check";
 import { useDestinationFacilities } from "@/lib/queries/referrals";
 import {
-  needsPostEmergencyComplaint,
   nextStepAfterComplaint,
   nextStepAfterDetails,
   requestLogPayload,
@@ -617,8 +616,8 @@ export default function NewEchoEncounterPage() {
             setState((s) => ({
               ...s,
               step:
-                needsPostEmergencyComplaint(s.primaryDangerSignCode) && s.complaintArea
-                  ? "complaint"
+                s.primaryDangerSignCode === "L8" && s.complaintArea
+                  ? "complaint_questions"
                   : s.dangerSignCodes.length > 0 || s.lookCheckUncertain
                     ? "consent"
                     : "complaint_questions",
@@ -694,7 +693,7 @@ export default function NewEchoEncounterPage() {
           continueLabel={
             state.primaryDangerSignCode === "L8"
               ? "Continue to questions"
-              : state.dangerSignCodes.length > 0 && !needsPostEmergencyComplaint(state.primaryDangerSignCode)
+              : state.dangerSignCodes.length > 0
                 ? "Continue to result"
                 : "Continue to complaint"
           }

@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  nextStepAfterComplaint,
   nextStepAfterDetails,
   referralStatusForOutcome,
   requestLogPayload,
@@ -18,13 +17,12 @@ describe("written patient journey routing", () => {
     });
   });
 
-  it("matches Journey 1: jaundice captures the complaint after consent, then goes to result", () => {
+  it("matches Journey 1: jaundice proceeds from consent to result without a complaint screen", () => {
     expect(nextStepAfterDetails({
       primaryDangerSignCode: "L5",
       hasDangerSign: true,
       complaintAreaCaptured: false,
-    })).toBe("complaint");
-    expect(nextStepAfterComplaint(true)).toBe("triage");
+    })).toBe("triage");
   });
 
   it("matches Journey 2: bleeding proceeds from consent to result without inventing another screen", () => {
