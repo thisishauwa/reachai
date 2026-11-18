@@ -33,9 +33,10 @@ describe("complaint question sets", () => {
   });
 
   it("applies the age gates from v0.3", () => {
-    expect(visibleComplaintQuestions("F", {}, "5_to_17").map((item) => item.id)).toEqual(["F1", "F2", "F4", "F5"]);
-    expect(visibleComplaintQuestions("F", {}, "18_to_49").map((item) => item.id)).toEqual(["F2", "F4", "F5"]);
+    expect(visibleComplaintQuestions("F", {}, "5_to_17").map((item) => item.id)).toEqual(["F1", "F2", "F4"]);
+    expect(visibleComplaintQuestions("F", {}, "18_to_49").map((item) => item.id)).toEqual(["F2", "F4"]);
     expect(visibleComplaintQuestions("F", {}, "under_28_days").map((item) => item.id)).toContain("F3");
+    expect(visibleComplaintQuestions("F", { WEAK_LIMB: "no", ANIMAL_BITE: "no", FEVER_PRESENT: "no" }, "5_to_17").map((item) => item.id)).toContain("F5");
   });
 
   it("adds every specified A2, A3 and A4/A5 follow-up only after its trigger", () => {

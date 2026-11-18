@@ -219,6 +219,20 @@ function appliesToAge(question: ComplaintQuestion, ageBand: string): boolean {
 export function visibleComplaintQuestions(area: ComplaintAreaCode, answers: Record<string, ComplaintAnswer>, ageBand = "18_to_49"): DisplayQuestion[] {
   const result: DisplayQuestion[] = [];
   for (const item of COMPLAINT_QUESTION_SETS[area].filter((questionItem) => appliesToAge(questionItem, ageBand))) {
+    // The written Journey 9 stops at F1-F4 when one of those routes has
+    // identified the problem. F5 is explicitly the fallback for "none of
+    // these", so it must not become an unrelated required question after a
+    // positive AFP, rabies or newborn answer.
+    if (area === "F" && item.id === "F5") {
+      const routedByF1ToF3 = ["WEAK_LIMB", "ANIMAL_BITE", "SICK_NEWBORN_SIGNS"]
+        .some((key) => answers[key] === "yes");
+      const feverNeedsSetA = answers.FEVER_PRESENT === "yes";
+      const allVisibleRoutesAnswered = COMPLAINT_QUESTION_SETS.F
+        .filter((questionItem) => questionItem.id !== "F5" && appliesToAge(questionItem, ageBand))
+        .every((questionItem) => hasComplaintAnswer(answers[questionItem.answerKey]));
+
+      if (routedByF1ToF3 || feverNeedsSetA || !allVisibleRoutesAnswered) continue;
+    }
     result.push(item);
     if (area === "A" && item.id === "A2" && answers.NECK_FLEXION === "no_stiff") {
       result.push(...A2_FOLLOW_UPS.filter((followUp) => appliesToAge(followUp, ageBand)));

@@ -54,10 +54,28 @@ describe("StepComplaintQuestions", () => {
 
   it("matches Journey 9: an 11-year-old sees F1 weak limb but not the newborn F3", () => {
     render(<StepComplaintQuestions area="F" ageBand="5_to_17" encounterId="encounter-1" onComplete={vi.fn()} />);
-    expect(screen.getAllByRole("group")).toHaveLength(4);
+    expect(screen.getAllByRole("group")).toHaveLength(3);
     expect(screen.getByText("F1")).toBeInTheDocument();
     expect(screen.getAllByText(/Sudden weakness or floppy arm or leg/)).toHaveLength(2);
     expect(screen.queryByText("F3")).not.toBeInTheDocument();
+    expect(screen.queryByText("F5")).not.toBeInTheDocument();
     expect(screen.queryByText("A1")).not.toBeInTheDocument();
+
+    answer("F1", /^Yes/);
+    answer("F2", /^No/);
+    answer("F4", /^No/);
+
+    expect(screen.queryByText("F5")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Continue to result/ })).toBeEnabled();
+  });
+
+  it("shows F5 only when none of the Set F routes apply", () => {
+    render(<StepComplaintQuestions area="F" ageBand="5_to_17" encounterId="encounter-1" onComplete={vi.fn()} />);
+    answer("F1", /^No/);
+    answer("F2", /^No/);
+    answer("F4", /^No/);
+
+    expect(screen.getByText("F5")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Continue to result/ })).toBeDisabled();
   });
 });

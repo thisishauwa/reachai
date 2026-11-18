@@ -7,6 +7,7 @@ import { createIdempotencyKey } from "@/lib/logic/idempotency";
 import { TriageBottomSheet } from "@/components/echo/triage-bottom-sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { evaluateMultiSyndromeTriage } from "@/lib/logic/triage";
+import { triageRulesetSnapshot } from "@/lib/logic/written-journey-flow";
 import type {
   TriageOutcomeRow,
   TriageSeverity,
@@ -146,6 +147,7 @@ export function StepTriage({
       }
 
       const outcomeId = rpcOutcomeId || crypto.randomUUID();
+      const rulesetSnapshot = triageRulesetSnapshot(clinical.conditionCode);
       const resolvedOutcome: TriageOutcomeRow = {
         id: outcomeId,
         encounter_id: encounterId,
@@ -159,7 +161,7 @@ export function StepTriage({
         ipc_guidance_ha: clinical.ipcGuidanceHa,
         referral_required: clinical.referralRequired,
         evaluated_inputs: (answers || {}) as unknown as Json,
-        ruleset_snapshot: [],
+        ruleset_snapshot: rulesetSnapshot as Json,
         evaluated_at: new Date().toISOString(),
         acknowledged_at: clinical.severity === "emergency" ? new Date().toISOString() : null,
         acknowledged_by: null,
@@ -167,12 +169,15 @@ export function StepTriage({
         triage_rule_id: null,
       };
 
+      // Persist the complete client-visible result even when the RPC created
+      // the row. The snapshot preserves every matched category separately for
+      // Journey 10 and the immediate-notification flag for Journey 9.
+      try {
+        await supabase.from("triage_outcomes").upsert(resolvedOutcome as never, { onConflict: "id" });
+      } catch (e) {
+        console.warn("Direct triage_outcomes upsert note:", e);
+      }
       if (!rpcOutcomeId) {
-        try {
-          await supabase.from("triage_outcomes").upsert(resolvedOutcome as never, { onConflict: "id" });
-        } catch (e) {
-          console.warn("Direct triage_outcomes upsert note:", e);
-        }
         try {
           await syncController.enqueue("triage_evaluation", outcomeId, "insert", resolvedOutcome as unknown as Record<string, unknown>);
         } catch (e) {
@@ -201,7 +206,7 @@ export function StepTriage({
         ipc_guidance_ha: clinical.ipcGuidanceHa,
         referral_required: clinical.referralRequired,
         evaluated_inputs: (answers || {}) as unknown as Json,
-        ruleset_snapshot: [],
+        ruleset_snapshot: triageRulesetSnapshot(clinical.conditionCode) as Json,
         evaluated_at: new Date().toISOString(),
         acknowledged_at: clinical.severity === "emergency" ? new Date().toISOString() : null,
         acknowledged_by: null,

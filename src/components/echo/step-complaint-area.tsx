@@ -5,7 +5,17 @@ import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { COMPLAINT_AREAS, type ComplaintAreaCode } from "@/lib/reference/complaint-questions";
 
-export function StepComplaintArea({ initialArea, onContinue, onPrevious }: { initialArea?: ComplaintAreaCode | null; onContinue: (area: ComplaintAreaCode) => void; onPrevious?: () => void }) {
+export function StepComplaintArea({
+  initialArea,
+  continueLabel = "Continue",
+  onContinue,
+  onPrevious,
+}: {
+  initialArea?: ComplaintAreaCode | null;
+  continueLabel?: string;
+  onContinue: (area: ComplaintAreaCode) => void;
+  onPrevious?: () => void;
+}) {
   const [selected, setSelected] = useState<ComplaintAreaCode | null>(initialArea ?? null);
   return (
     <div className="w-full flex flex-col gap-6 pb-28">
@@ -28,7 +38,7 @@ export function StepComplaintArea({ initialArea, onContinue, onPrevious }: { ini
       </div>
       <div className="encounter-action-bar">
         {onPrevious ? <button type="button" onClick={onPrevious} className="min-h-11 rounded-[12px] border border-[#e4e8ec] bg-white px-5 text-sm font-medium">Previous</button> : <span />}
-        <button type="button" disabled={!selected} onClick={() => selected && onContinue(selected)} className="min-h-11 rounded-[12px] bg-[#0073f3] px-6 sm:px-8 text-sm sm:text-base font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed">Continue</button>
+        <button type="button" disabled={!selected} onClick={() => selected && onContinue(selected)} className="min-h-11 rounded-[12px] bg-[#0073f3] px-6 sm:px-8 text-sm sm:text-base font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed">{continueLabel}</button>
       </div>
     </div>
   );

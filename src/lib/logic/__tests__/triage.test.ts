@@ -318,6 +318,26 @@ describe("evaluateMultiSyndromeTriage", () => {
     expect(outcome.conditionCode).toContain("TYPHOID_PATTERN");
   });
 
+  it("matches Journey 11: vendor judgement stays Acute and unclassified after the routed fever set", () => {
+    const outcome = evaluateMultiSyndromeTriage(["LOOK_CHECK_UNWELL"], {
+      E25: "yes",
+      E26: "no",
+      E27: "no",
+      COMPLAINT_AREA: "A",
+      FEVER_DURATION: "3_6_days",
+      NECK_FLEXION: "yes_easily",
+      RASH_PRESENT: "no",
+      MALARIA_MEDICINE_NO_IMPROVEMENT: "yes",
+      LASSA_EXPOSURE: "no",
+      YELLOW_FEVER_EXPOSURE: "no",
+      DIARRHOEA_OR_VOMITING: "no",
+      COUGH_PRESENT: "no",
+    });
+    expect(outcome.severity).toBe("emergency");
+    expect(outcome.referralRequired).toBe(true);
+    expect(outcome.conditionCode).toBe("ACUTE_UNCLASSIFIED_VENDOR_JUDGEMENT");
+  });
+
   it("matches the full Set A measles rule when the conditional rash questions fire", () => {
     const outcome = evaluateMultiSyndromeTriage([], {
       COMPLAINT_AREA: "A",

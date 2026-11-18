@@ -49,6 +49,12 @@ import type {
 } from "@/lib/reference/complaint-questions";
 import { complaintAreaForL8Answers } from "@/lib/reference/look-check";
 import { useDestinationFacilities } from "@/lib/queries/referrals";
+import {
+  needsPostEmergencyComplaint,
+  nextStepAfterComplaint,
+  nextStepAfterDetails,
+  requestLogPayload,
+} from "@/lib/logic/written-journey-flow";
 
 // Flow order per spec v0.3 / walkthrough v0.4 (AIR-794):
 // request → presence + age → look-check
@@ -285,12 +291,11 @@ export default function NewEchoEncounterPage() {
 
   // ── Step 4: Details + consent complete ──────────────────────────────────
   async function handleDemographicsComplete(data: DetailsConsentResult) {
-    const nextStep: EchoStep =
-      state.primaryDangerSignCode === "L8" && state.complaintArea
-        ? "complaint_questions"
-        : state.dangerSignCodes.length > 0
-        ? "triage"
-        : "complaint";
+    const nextStep: EchoStep = nextStepAfterDetails({
+      primaryDangerSignCode: state.primaryDangerSignCode,
+      hasDangerSign: state.dangerSignCodes.length > 0,
+      complaintAreaCaptured: Boolean(state.complaintArea),
+    });
 
     // Returning from a later screen must update the in-memory details without
     // creating a second encounter for the same walkthrough.
@@ -433,6 +438,30 @@ export default function NewEchoEncounterPage() {
         "insert",
         demoPayload,
       );
+
+      // Every written journey starts with "Logs the request". Persist the
+      // structured request code in the existing clinical-note record instead
+      // of leaving it only in transient React state.
+      if (state.requestType) {
+        const requestNotePayload = requestLogPayload(encounterId, state.requestType, userId);
+        try {
+          await supabase
+            .from("clinical_notes")
+            .upsert(requestNotePayload, { onConflict: "encounter_id" });
+        } catch (requestNoteError) {
+          console.warn("Request log upsert note:", requestNoteError);
+        }
+        try {
+          await syncController.enqueue(
+            "clinical_notes",
+            encounterId,
+            "insert",
+            requestNotePayload,
+          );
+        } catch (requestQueueError) {
+          console.warn("Request log queue note:", requestQueueError);
+        }
+      }
 
       // Save consent record according to mode
       if (state.privacyMode === "identified") {
@@ -588,9 +617,11 @@ export default function NewEchoEncounterPage() {
             setState((s) => ({
               ...s,
               step:
-                s.dangerSignCodes.length > 0 || s.lookCheckUncertain
-                  ? "consent"
-                  : "complaint_questions",
+                needsPostEmergencyComplaint(s.primaryDangerSignCode) && s.complaintArea
+                  ? "complaint"
+                  : s.dangerSignCodes.length > 0 || s.lookCheckUncertain
+                    ? "consent"
+                    : "complaint_questions",
             }));
           } else if (state.step === "referral") {
             setState((s) => ({ ...s, step: "triage" }));
@@ -660,6 +691,13 @@ export default function NewEchoEncounterPage() {
           ageBand={state.ageBand}
           isMinor={state.isMinor}
           caregiverReported={state.caregiverReported}
+          continueLabel={
+            state.primaryDangerSignCode === "L8"
+              ? "Continue to questions"
+              : state.dangerSignCodes.length > 0 && !needsPostEmergencyComplaint(state.primaryDangerSignCode)
+                ? "Continue to result"
+                : "Continue to complaint"
+          }
           onContinue={(data) => void handleDemographicsComplete(data)}
           onPrevious={() =>
             setState((s) => ({
@@ -675,11 +713,13 @@ export default function NewEchoEncounterPage() {
         <StepComplaintArea
           initialArea={state.complaintArea}
           onPrevious={() => setState((s) => ({ ...s, step: "consent" }))}
+          continueLabel={state.dangerSignCodes.length > 0 ? "Continue to result" : undefined}
           onContinue={(area) =>
             setState((s) => ({
               ...s,
               complaintArea: area,
-              step: "complaint_questions",
+              answers: { ...s.answers, COMPLAINT_AREA: area },
+              step: nextStepAfterComplaint(s.dangerSignCodes.length > 0),
             }))
           }
         />
@@ -763,6 +803,8 @@ export default function NewEchoEncounterPage() {
           conditionLabel={state.triageConditionLabel ?? "Signs that need a clinic check"}
           guidanceText={state.triageGuidanceEn ?? "The recorded signs need a clinic assessment."}
           ipcGuidance={state.triageIpcGuidanceEn}
+          caregiverReported={state.caregiverReported}
+          requiresMaternityCapability={state.answers.PREGNANCY_STATUS === "pregnant"}
           onComplete={() => {
             void completeEncounter(state.encounterId!);
             setState((s) => ({ ...s, step: "complete" }));

@@ -6,7 +6,10 @@ export interface ReferralFacility {
   address_text: string | null;
   distance_label: string | null;
   opening_status: string | null;
+  capabilities: ReferralFacilityCapability[];
 }
+
+export type ReferralFacilityCapability = "maternity";
 
 export const REFERRAL_FACILITIES: ReferralFacility[] = [
   {
@@ -17,6 +20,7 @@ export const REFERRAL_FACILITIES: ReferralFacility[] = [
     address_text: "Gyadi-gyadi, Kano",
     distance_label: null,
     opening_status: null,
+    capabilities: ["maternity"],
   },
   {
     id: "00000000-0000-0000-0000-000000000012",
@@ -26,6 +30,7 @@ export const REFERRAL_FACILITIES: ReferralFacility[] = [
     address_text: "Kuje, Abuja",
     distance_label: null,
     opening_status: null,
+    capabilities: ["maternity"],
   },
   {
     id: "00000000-0000-0000-0000-000000000013",
@@ -35,6 +40,7 @@ export const REFERRAL_FACILITIES: ReferralFacility[] = [
     address_text: "Yanoko, Tofa",
     distance_label: null,
     opening_status: null,
+    capabilities: ["maternity"],
   },
   {
     id: "00000000-0000-0000-0000-000000000014",
@@ -44,7 +50,12 @@ export const REFERRAL_FACILITIES: ReferralFacility[] = [
     address_text: null,
     distance_label: null,
     opening_status: null,
+    capabilities: ["maternity"],
   },
 ];
 
 export const REFERRAL_FACILITY_CODES = REFERRAL_FACILITIES.map((facility) => facility.code);
+
+export function referralFacilityCapabilities(code: string): ReferralFacilityCapability[] {
+  return REFERRAL_FACILITIES.find((facility) => facility.code === code)?.capabilities ?? [];
+}

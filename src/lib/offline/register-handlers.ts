@@ -349,13 +349,28 @@ export function registerOutboxHandlers() {
       }
     }
 
-    const { error } = await supabase.rpc("create_referral", {
-      p_encounter_id: encounterId,
-      p_destination_facility_id: destinationFacilityId,
-      p_privacy_mode: privacyMode,
-      p_consent_id: consentId,
-      p_idempotency_key: item.id,
-    });
+    const referralCode = raw.referral_code as string | undefined;
+    const referralOutcome = raw.referral_outcome as "referred" | "refused" | "not_referred" | undefined;
+    const result = referralCode && referralOutcome
+      ? await supabase.rpc("save_referral_outcome_v03" as never, {
+          p_encounter_id: encounterId,
+          p_destination_facility_id: destinationFacilityId,
+          p_privacy_mode: privacyMode,
+          p_consent_id: consentId,
+          p_referral_code: referralCode,
+          p_referral_outcome: referralOutcome,
+          p_referral_outcome_reason: raw.referral_outcome_reason ?? null,
+          p_destination_facility_name_free_text: raw.destination_facility_name_free_text ?? null,
+          p_idempotency_key: item.id,
+        } as never)
+      : await supabase.rpc("create_referral", {
+          p_encounter_id: encounterId,
+          p_destination_facility_id: destinationFacilityId,
+          p_privacy_mode: privacyMode,
+          p_consent_id: consentId,
+          p_idempotency_key: item.id,
+        });
+    const { error } = result;
     if (error) {
       const msg = (error.message || "").toLowerCase();
       if (
@@ -365,11 +380,11 @@ export function registerOutboxHandlers() {
         error.code === "23505" ||
         error.code === "P0001"
       ) {
-        console.warn("create_referral already completed/idempotent, marked synced.");
+        console.warn("Referral outcome already completed/idempotent, marked synced.");
         return;
       }
       console.error(
-        "create_referral RPC returned error:",
+        "Referral outcome RPC returned error:",
         JSON.stringify(error, null, 2),
         error
       );

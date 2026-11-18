@@ -21,6 +21,7 @@ interface StepDetailsConsentProps {
   ageBand: string;
   isMinor: boolean;
   caregiverReported: boolean;
+  continueLabel?: string;
   onContinue: (data: DetailsConsentResult) => void;
   onPrevious?: () => void;
 }
@@ -73,7 +74,7 @@ function ChoiceGrid<T extends string>({
   );
 }
 
-export function StepDetailsConsent({ presence, ageBand, isMinor, caregiverReported, onContinue, onPrevious }: StepDetailsConsentProps) {
+export function StepDetailsConsent({ presence, ageBand, isMinor, caregiverReported, continueLabel = "Continue to complaint", onContinue, onPrevious }: StepDetailsConsentProps) {
   const [relationship, setRelationship] = useState<PatientRelationship | "">("");
   const [sex, setSex] = useState<DemographicsData["sex"] | "">("");
   const [pregnancy, setPregnancy] = useState<PregnancyChoice | "">("");
@@ -194,7 +195,7 @@ export function StepDetailsConsent({ presence, ageBand, isMinor, caregiverReport
 
       <div className="encounter-action-bar">
         {onPrevious ? <button type="button" onClick={onPrevious} className="min-h-11 rounded-[12px] border border-[#e4e8ec] bg-white px-5 text-sm font-medium">Previous</button> : <span />}
-        <button type="button" onClick={handleContinue} disabled={!canContinue} className="min-h-11 rounded-[12px] bg-[#0073f3] px-6 sm:px-8 text-sm sm:text-base font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed">Continue to complaint</button>
+        <button type="button" onClick={handleContinue} disabled={!canContinue} className="min-h-11 rounded-[12px] bg-[#0073f3] px-6 sm:px-8 text-sm sm:text-base font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed">{continueLabel}</button>
       </div>
     </div>
   );
