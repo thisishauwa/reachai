@@ -21,6 +21,10 @@ interface StepDetailsConsentProps {
   ageBand: string;
   isMinor: boolean;
   caregiverReported: boolean;
+  confirmedComplaint?: {
+    label: string;
+    labelHa: string;
+  };
   continueLabel?: string;
   onContinue: (data: DetailsConsentResult) => void;
   onPrevious?: () => void;
@@ -74,7 +78,7 @@ function ChoiceGrid<T extends string>({
   );
 }
 
-export function StepDetailsConsent({ presence, ageBand, isMinor, caregiverReported, continueLabel = "Continue to complaint", onContinue, onPrevious }: StepDetailsConsentProps) {
+export function StepDetailsConsent({ presence, ageBand, isMinor, caregiverReported, confirmedComplaint, continueLabel = "Continue to complaint", onContinue, onPrevious }: StepDetailsConsentProps) {
   const [relationship, setRelationship] = useState<PatientRelationship | "">("");
   const [sex, setSex] = useState<DemographicsData["sex"] | "">("");
   const [pregnancy, setPregnancy] = useState<PregnancyChoice | "">("");
@@ -142,6 +146,14 @@ export function StepDetailsConsent({ presence, ageBand, isMinor, caregiverReport
                 <p className="text-xs text-[#315f8b] mt-1">Majiyyacin ba ya nan. Za a yi wa bayanan alamar cewa wani ne ya bayar da rahoton.</p>
               </div>
             </div>
+          )}
+
+          {confirmedComplaint && (
+            <section className="rounded-[16px] border border-[#e4e8ec] bg-white p-4 sm:p-6" aria-label="Complaint area">
+              <p className="text-xs font-semibold uppercase tracking-wider text-[#6e8298]">Complaint area</p>
+              <p className="mt-1 text-sm sm:text-base font-semibold text-[#242b33]">{confirmedComplaint.label}</p>
+              <p className="text-xs text-[#6e8298]">{confirmedComplaint.labelHa}</p>
+            </section>
           )}
 
           {presence === "with_me" && isMinor && relationship === "myself" && (

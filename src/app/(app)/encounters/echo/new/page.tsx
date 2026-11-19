@@ -50,6 +50,7 @@ import type {
 import { complaintAreaForL8Answers } from "@/lib/reference/look-check";
 import { useDestinationFacilities } from "@/lib/queries/referrals";
 import {
+  documentedDangerSignComplaintArea,
   nextStepAfterComplaint,
   nextStepAfterDetails,
   requestLogPayload,
@@ -290,10 +291,12 @@ export default function NewEchoEncounterPage() {
 
   // ── Step 4: Details + consent complete ──────────────────────────────────
   async function handleDemographicsComplete(data: DetailsConsentResult) {
+    const documentedComplaintArea = documentedDangerSignComplaintArea(state.primaryDangerSignCode);
+    const capturedComplaintArea = state.complaintArea ?? documentedComplaintArea;
     const nextStep: EchoStep = nextStepAfterDetails({
       primaryDangerSignCode: state.primaryDangerSignCode,
       hasDangerSign: state.dangerSignCodes.length > 0,
-      complaintAreaCaptured: Boolean(state.complaintArea),
+      complaintAreaCaptured: Boolean(capturedComplaintArea),
     });
 
     // Returning from a later screen must update the in-memory details without
@@ -304,11 +307,13 @@ export default function NewEchoEncounterPage() {
         patientRelationship: data.relationship,
         sex: data.sex,
         locale: data.locale,
+        complaintArea: capturedComplaintArea,
         answers: {
           ...s.answers,
           PATIENT_RELATIONSHIP: data.relationship,
           CONSENTED_BY: data.consentedBy,
           PREGNANCY_STATUS: data.pregnancyStatus,
+          ...(capturedComplaintArea ? { COMPLAINT_AREA: capturedComplaintArea } : {}),
         },
         step: nextStep,
       }));
@@ -504,11 +509,13 @@ export default function NewEchoEncounterPage() {
       patientRelationship: data.relationship,
       sex: data.sex,
       locale: data.locale,
+      complaintArea: capturedComplaintArea,
       answers: {
         ...s.answers,
         PATIENT_RELATIONSHIP: data.relationship,
         CONSENTED_BY: data.consentedBy,
         PREGNANCY_STATUS: data.pregnancyStatus,
+        ...(capturedComplaintArea ? { COMPLAINT_AREA: capturedComplaintArea } : {}),
       },
       sessionCode: state.privacyMode === "anonymous" ? sessionCode : null,
       consentId,
@@ -690,6 +697,11 @@ export default function NewEchoEncounterPage() {
           ageBand={state.ageBand}
           isMinor={state.isMinor}
           caregiverReported={state.caregiverReported}
+          confirmedComplaint={
+            documentedDangerSignComplaintArea(state.primaryDangerSignCode) === "A"
+              ? { label: "Fever or hot body", labelHa: "Zazzabi ko jiki mai zafi" }
+              : undefined
+          }
           continueLabel={
             state.primaryDangerSignCode === "L8"
               ? "Continue to questions"

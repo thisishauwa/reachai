@@ -7,6 +7,11 @@ export type WrittenJourneyStep =
 
 export type ReferralOutcomeChoice = "referred" | "refused" | "not_referred";
 
+/** Journey 1 explicitly records complaint: fever inside Step 4, without a separate complaint screen. */
+export function documentedDangerSignComplaintArea(primaryDangerSignCode: string | null): "A" | null {
+  return primaryDangerSignCode === "L5" ? "A" : null;
+}
+
 export function nextStepAfterDetails(input: {
   primaryDangerSignCode: string | null;
   hasDangerSign: boolean;

@@ -3,6 +3,21 @@ import { describe, expect, it, vi } from "vitest";
 import { StepDetailsConsent } from "../step-details-consent";
 
 describe("StepDetailsConsent", () => {
+  it("captures the documented Journey 1 fever complaint inside Step 4", () => {
+    render(
+      <StepDetailsConsent
+        presence="with_me"
+        ageBand="18_to_49"
+        isMinor={false}
+        caregiverReported={false}
+        confirmedComplaint={{ label: "Fever or hot body", labelHa: "Zazzabi ko jiki mai zafi" }}
+        onContinue={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("region", { name: "Complaint area" })).toHaveTextContent("Fever or hot body");
+    expect(screen.queryByText("What is the main problem?")).not.toBeInTheDocument();
+  });
+
   it("shows pregnancy only for Female age 18 to 49", () => {
     const props = { presence: "with_me" as const, isMinor: false, caregiverReported: false, onContinue: vi.fn() };
     const { rerender } = render(<StepDetailsConsent {...props} ageBand="18_to_49" />);

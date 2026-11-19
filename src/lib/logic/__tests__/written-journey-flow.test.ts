@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  documentedDangerSignComplaintArea,
   nextStepAfterDetails,
   referralStatusForOutcome,
   requestLogPayload,
@@ -18,11 +19,16 @@ describe("written patient journey routing", () => {
   });
 
   it("matches Journey 1: jaundice proceeds from consent to result without a complaint screen", () => {
+    expect(documentedDangerSignComplaintArea("L5")).toBe("A");
     expect(nextStepAfterDetails({
       primaryDangerSignCode: "L5",
       hasDangerSign: true,
       complaintAreaCaptured: false,
     })).toBe("triage");
+  });
+
+  it("does not invent a complaint area for Journey 2", () => {
+    expect(documentedDangerSignComplaintArea("L3")).toBeNull();
   });
 
   it("matches Journey 2: bleeding proceeds from consent to result without inventing another screen", () => {
