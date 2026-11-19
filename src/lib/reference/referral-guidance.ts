@@ -61,7 +61,7 @@ export function careGuidanceFor(
     return {
       ...defaultGuidance,
       severityReason: "Fever and rash signs need a clinic assessment and separation from vulnerable people.",
-      give: ["Give paracetamol and fluids if appropriate.", "Give Vitamin A only if it is within your registered scope."],
+      give: ["Give paracetamol and fluids if appropriate."],
       doNotGive: ["Do not give routine antibiotics or steroids.", "Do not give aspirin to a child."],
       ipc: ["Keep the patient away from babies and pregnant women and open the windows and door.", "Do not share clothes or bedding."],
       plainReason: "The fever and rash need a clinic check.",
