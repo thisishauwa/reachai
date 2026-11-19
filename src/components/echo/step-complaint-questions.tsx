@@ -87,16 +87,33 @@ interface StepComplaintQuestionsProps {
   area: ComplaintAreaCode;
   ageBand: string;
   encounterId: string;
+  pregnancyStatus?: string | null;
   caregiverReported?: boolean;
   initialAnswers?: Record<string, ComplaintAnswer>;
   onComplete: (questionSetId: string, answers: Record<string, ComplaintAnswer>) => void;
   onPrevious?: () => void;
 }
 
-export function StepComplaintQuestions({ area, ageBand, encounterId, caregiverReported = false, initialAnswers = {}, onComplete, onPrevious }: StepComplaintQuestionsProps) {
+export function StepComplaintQuestions({ area, ageBand, encounterId, pregnancyStatus, caregiverReported = false, initialAnswers = {}, onComplete, onPrevious }: StepComplaintQuestionsProps) {
   const { userId } = useSession();
   const [answers, setAnswers] = useState<Record<string, ComplaintAnswer>>(initialAnswers);
-  const questions = useMemo(() => visibleComplaintQuestions(area, answers, ageBand), [ageBand, area, answers]);
+  const questions = useMemo(() => {
+    const visible = visibleComplaintQuestions(area, answers, ageBand);
+    if (area !== "C") return visible;
+
+    return visible.filter((question) => {
+      // The agreed journey prototype omits C5 from Set C.
+      if (question.id === "C5") return false;
+
+      // Journey 5 omits C4 on the pregnant measles path. Keep it when the
+      // rash location selects the separate mpox path, where C4 drives referral.
+      if (question.id === "C4" && pregnancyStatus === "pregnant") {
+        return answers.RASH_START_LOCATION === "hands_face_genitals";
+      }
+
+      return true;
+    });
+  }, [ageBand, answers, area, pregnancyStatus]);
   const hasStarted = Object.keys(answers).length > 0;
   const allAnswered = questions.length > 0 && questions.every((question) => hasComplaintAnswer(answers[question.answerKey]));
   const areaLabel = COMPLAINT_AREAS.find((item) => item.code === area)?.label_en ?? area;

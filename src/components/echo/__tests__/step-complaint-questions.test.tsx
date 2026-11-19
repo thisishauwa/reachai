@@ -52,6 +52,55 @@ describe("StepComplaintQuestions", () => {
     expect(screen.getAllByText(/Weight loss or night sweats/)).toHaveLength(2);
   });
 
+  it("matches Journey 4: keeps C4 and omits C5 from the non-pregnant rash path", () => {
+    render(
+      <StepComplaintQuestions
+        area="C"
+        ageBand="18_to_49"
+        encounterId="encounter-1"
+        pregnancyStatus="not_pregnant"
+        onComplete={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("C4")).toBeInTheDocument();
+    expect(screen.queryByText("C5")).not.toBeInTheDocument();
+  });
+
+  it("matches Journey 5: omits C4 and C5 from the pregnant measles path", () => {
+    render(
+      <StepComplaintQuestions
+        area="C"
+        ageBand="18_to_49"
+        encounterId="encounter-1"
+        pregnancyStatus="pregnant"
+        onComplete={vi.fn()}
+      />,
+    );
+
+    answer("C2", /^Face or behind ears/);
+
+    expect(screen.queryByText("C4")).not.toBeInTheDocument();
+    expect(screen.queryByText("C5")).not.toBeInTheDocument();
+  });
+
+  it("keeps C4 on the pregnant mpox path because it still drives that referral", () => {
+    render(
+      <StepComplaintQuestions
+        area="C"
+        ageBand="18_to_49"
+        encounterId="encounter-1"
+        pregnancyStatus="pregnant"
+        onComplete={vi.fn()}
+      />,
+    );
+
+    answer("C2", /^Hands, face or genitals/);
+
+    expect(screen.getByText("C4")).toBeInTheDocument();
+    expect(screen.queryByText("C5")).not.toBeInTheDocument();
+  });
+
   it("matches Journey 9: an 11-year-old sees F1 weak limb but not the newborn F3", () => {
     render(<StepComplaintQuestions area="F" ageBand="5_to_17" encounterId="encounter-1" onComplete={vi.fn()} />);
     expect(screen.getAllByRole("group")).toHaveLength(3);

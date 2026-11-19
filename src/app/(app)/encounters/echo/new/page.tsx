@@ -742,6 +742,11 @@ export default function NewEchoEncounterPage() {
           area={state.complaintArea}
           ageBand={state.ageBand}
           encounterId={state.encounterId}
+          pregnancyStatus={
+            typeof state.answers.PREGNANCY_STATUS === "string"
+              ? state.answers.PREGNANCY_STATUS
+              : null
+          }
           caregiverReported={state.caregiverReported}
           initialAnswers={state.complaintAnswers}
           onPrevious={() => setState((s) => ({ ...s, step: "complaint" }))}
