@@ -98,7 +98,29 @@ export function StepComplaintQuestions({ area, ageBand, encounterId, pregnancySt
   const { userId } = useSession();
   const [answers, setAnswers] = useState<Record<string, ComplaintAnswer>>(initialAnswers);
   const questions = useMemo(() => {
-    const visible = visibleComplaintQuestions(area, answers, ageBand);
+    let visible = visibleComplaintQuestions(area, answers, ageBand);
+
+    if (area === "A") {
+      const bridgeQuestions = visible.filter((question) => question.bridgeFrom === "A7");
+      const bridgeAnswered = bridgeQuestions.length > 0 && bridgeQuestions.every(
+        (question) => hasComplaintAnswer(answers[question.answerKey]),
+      );
+      const dehydrationSigns = Array.isArray(answers.DEHYDRATION_SIGNS)
+        ? answers.DEHYDRATION_SIGNS.filter((answer) => answer !== "none")
+        : [];
+      const severeDehydrationAlreadyFires = dehydrationSigns.length >= 2;
+
+      // The written journeys place A8 after the A7 diarrhoea bridge. Journey 10
+      // stops once two dehydration signs make the result Acute, so A8 must not
+      // gate that referral. Journey 7 asks A8 only after B1-B4 are complete.
+      visible = visible.filter((question) => {
+        if (question.id !== "A8") return true;
+        if (!hasComplaintAnswer(answers.DIARRHOEA_OR_VOMITING)) return false;
+        if (answers.DIARRHOEA_OR_VOMITING === "yes" && !bridgeAnswered) return false;
+        return !severeDehydrationAlreadyFires;
+      });
+    }
+
     if (area !== "C") return visible;
 
     return visible.filter((question) => {
@@ -117,18 +139,35 @@ export function StepComplaintQuestions({ area, ageBand, encounterId, pregnancySt
   const hasStarted = Object.keys(answers).length > 0;
   const allAnswered = questions.length > 0 && questions.every((question) => hasComplaintAnswer(answers[question.answerKey]));
   const areaLabel = COMPLAINT_AREAS.find((item) => item.code === area)?.label_en ?? area;
-  const baseQuestions = questions.filter((question) => !question.bridgeFrom);
+  const baseQuestions = questions.filter((question) => !question.bridgeFrom && question.id !== "A8");
+  const postDiarrhoeaBridgeQuestions = questions.filter((question) => question.id === "A8");
   const bridgeA7 = questions.filter((question) => question.bridgeFrom === "A7");
   const bridgeA8 = questions.filter((question) => question.bridgeFrom === "A8");
   const bridgeF4 = questions.filter((question) => question.bridgeFrom === "F4");
 
   const setAnswer = (key: string, value: ComplaintAnswer) => setAnswers((current) => {
     const next = { ...current, [key]: value };
+    if (key === "DIARRHOEA_OR_VOMITING" && current[key] !== value) {
+      delete next.COUGH_PRESENT;
+      delete next.COUGH_DURATION;
+      delete next.BLOOD_IN_SPUTUM;
+      delete next.WEIGHT_LOSS_OR_NIGHT_SWEATS;
+    }
     if (key === "DIARRHOEA_OR_VOMITING" && value !== "yes") {
       delete next.WATERY_STOOL_COUNT;
       delete next.BLOOD_OR_MUCUS_STOOL;
       delete next.RICE_WATER_STOOL;
       delete next.DEHYDRATION_SIGNS;
+    }
+    if (
+      key === "DEHYDRATION_SIGNS" &&
+      Array.isArray(value) &&
+      value.filter((answer) => answer !== "none").length >= 2
+    ) {
+      delete next.COUGH_PRESENT;
+      delete next.COUGH_DURATION;
+      delete next.BLOOD_IN_SPUTUM;
+      delete next.WEIGHT_LOSS_OR_NIGHT_SWEATS;
     }
     if (key === "COUGH_PRESENT" && value !== "yes") {
       delete next.COUGH_DURATION;
@@ -204,6 +243,10 @@ export function StepComplaintQuestions({ area, ageBand, encounterId, pregnancySt
             <div className="flex gap-3"><Link2 className="size-5 text-[#596b7c] shrink-0" /><div><p className="font-semibold text-[#354554]">A few related questions</p><p className="text-sm text-[#596b7c]">You mentioned diarrhoea or vomiting. These answers help choose the safest next step.</p><p className="text-xs text-[#596b7c] mt-1">Kun ambaci gudawa ko amai. Wadannan amsoshin za su taimaka wajen zabar mataki mafi aminci.</p></div></div>
             {renderQuestions(bridgeA7)}
           </section>
+        )}
+
+        {postDiarrhoeaBridgeQuestions.length > 0 && (
+          <div className="flex flex-col gap-4">{renderQuestions(postDiarrhoeaBridgeQuestions)}</div>
         )}
 
         {bridgeA8.length > 0 && (

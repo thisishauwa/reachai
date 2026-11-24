@@ -12,7 +12,7 @@ function answer(id: string, option: RegExp) {
   fireEvent.click(within(group).getByRole("button", { name: option }));
 }
 
-function completeSetABase(a7: "yes" | "no" = "no", a8: "yes" | "no" = "no") {
+function completeSetAThroughA7(a7: "yes" | "no" = "no") {
   answer("A1", /^1 to 2/);
   answer("A2", /^Yes, easily/);
   answer("A3", /^No/);
@@ -20,7 +20,6 @@ function completeSetABase(a7: "yes" | "no" = "no", a8: "yes" | "no" = "no") {
   answer("A5", /^No/);
   answer("A6", /^No/);
   answer("A7", a7 === "yes" ? /^Yes/ : /^No/);
-  answer("A8", a8 === "yes" ? /^Yes/ : /^No/);
 }
 
 describe("StepComplaintQuestions", () => {
@@ -28,7 +27,8 @@ describe("StepComplaintQuestions", () => {
 
   it("matches Journey 3: short fever, all negative, no bridge", () => {
     render(<StepComplaintQuestions area="A" ageBand="18_to_49" encounterId="encounter-1" onComplete={vi.fn()} />);
-    completeSetABase();
+    completeSetAThroughA7();
+    answer("A8", /^No/);
     expect(screen.queryByText(/You mentioned diarrhoea or vomiting/)).not.toBeInTheDocument();
     expect(screen.queryByText(/You mentioned a cough/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Continue to result/ })).toBeEnabled();
@@ -36,12 +36,37 @@ describe("StepComplaintQuestions", () => {
 
   it("matches Journey 7: A7 reveals B1-B4 in the grey bridge and keeps Continue disabled", () => {
     render(<StepComplaintQuestions area="A" ageBand="18_to_49" encounterId="encounter-1" onComplete={vi.fn()} />);
-    completeSetABase("yes");
+    completeSetAThroughA7("yes");
     expect(screen.getByText(/You mentioned diarrhoea or vomiting/)).toBeInTheDocument();
     expect(screen.getByText("B1")).toBeInTheDocument();
     expect(screen.getByText("B4")).toBeInTheDocument();
+    expect(screen.queryByText("A8")).not.toBeInTheDocument();
     expect(screen.getAllByText("Required — choose an answer.")).toHaveLength(4);
     expect(screen.getByRole("button", { name: /Continue to result/ })).toBeDisabled();
+
+    answer("B1", /^6 to 10/);
+    answer("B2", /^No/);
+    answer("B3", /^Yes/);
+    answer("B4", /^Very thirsty/);
+
+    expect(screen.getByText("A8")).toBeInTheDocument();
+    answer("A8", /^No/);
+    expect(screen.getByRole("button", { name: /Continue to result/ })).toBeEnabled();
+  });
+
+  it("matches Journey 10: severe dehydration proceeds without asking A8", () => {
+    render(<StepComplaintQuestions area="A" ageBand="18_to_49" encounterId="encounter-1" onComplete={vi.fn()} />);
+    completeSetAThroughA7("yes");
+
+    answer("B1", /^6 to 10/);
+    answer("B2", /^No/);
+    answer("B3", /^Yes/);
+    answer("B4", /^Sunken eyes/);
+    expect(screen.getByText("A8")).toBeInTheDocument();
+
+    answer("B4", /^Very thirsty/);
+    expect(screen.queryByText("A8")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Continue to result/ })).toBeEnabled();
   });
 
   it("matches Journeys 8 and 12: set E uses cough duration and weight-loss questions", () => {
