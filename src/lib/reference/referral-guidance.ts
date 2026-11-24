@@ -11,6 +11,41 @@ export interface CareGuidance {
   surveillanceNotice?: string;
 }
 
+/** Keeps the result language non-diagnostic while rendering multi-category matches separately. */
+export function resultCategoryLabels(conditionLabel: string): string[] {
+  const labels = conditionLabel
+    .split(/;\s*also\s*/i)
+    .map((label) => label.replace(/^signs consistent with\s+/i, "").trim())
+    .filter(Boolean);
+
+  if (labels.length === 0 || labels.every((label) => label === "No specific category identified")) {
+    return ["a routine illness without a priority disease pattern"];
+  }
+  return labels;
+}
+
+export function protectHeadingFor(conditionCode: string): string {
+  const code = conditionCode.toUpperCase();
+  if (includesAny(code, ["CHOLERA", "DYSENTERY", "TYPHOID", "DEHYDRATION"])) {
+    return "Protect everyone at home";
+  }
+  if (includesAny(code, ["TB", "MEASLES", "MPOX", "MENINGITIS", "DIPHTHERIA"])) {
+    return "Protect others";
+  }
+  return "Protect yourself and others";
+}
+
+export function resultRecommendation(
+  conditionCode: string,
+  severity: TriageSeverity,
+  referralRequired: boolean,
+): string {
+  if (!referralRequired) return "Routine care — return or go to a clinic if warning signs appear.";
+  if (conditionCode.toUpperCase().includes("TB")) return "Refer for testing within the week.";
+  if (severity === "emergency") return "Refer now — do not delay.";
+  return "Refer today.";
+}
+
 function includesAny(code: string, values: string[]): boolean {
   return values.some((value) => code.includes(value));
 }

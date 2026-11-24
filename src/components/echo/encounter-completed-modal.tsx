@@ -1,146 +1,84 @@
 "use client";
 
+import { BarChart3, CheckCircle2, MapPin } from "lucide-react";
 import { useRouter } from "next/navigation";
+import type { ReferralOutcome } from "@/components/echo/step-referral";
+import { resultCategoryLabels } from "@/lib/reference/referral-guidance";
+import type { TriageSeverity } from "@/lib/supabase/database.types";
 
 interface EncounterCompletedModalProps {
   patientName?: string;
   isAnonymous?: boolean;
+  category?: string | null;
+  severity?: TriageSeverity | null;
+  recommendation?: string | null;
+  referralOutcome?: ReferralOutcome | "not_required" | null;
+  referralReason?: string | null;
+  referralDestination?: string | null;
   onReturnHome?: () => void;
 }
 
+const OUTCOME_LABELS: Record<ReferralOutcome | "not_required", string> = {
+  referred: "Yes, referred",
+  refused: "Yes, but the patient refused",
+  not_referred: "No — recommendation declined",
+  not_required: "No referral required",
+};
+
+function severityLabel(severity?: TriageSeverity | null): string {
+  if (severity === "emergency") return "Acute";
+  if (severity === "urgent") return "Urgent";
+  return "Routine";
+}
+
 export function EncounterCompletedModal({
-  patientName = "Oyintari Werinipre",
+  patientName = "Patient",
   isAnonymous = false,
+  category,
+  severity,
+  recommendation,
+  referralOutcome,
+  referralReason,
+  referralDestination,
   onReturnHome,
 }: EncounterCompletedModalProps) {
   const router = useRouter();
+  const categories = resultCategoryLabels(category || "No specific category identified");
+  const outcomeLabel = referralOutcome ? OUTCOME_LABELS[referralOutcome] : "Recorded";
 
   const handleReturnHome = () => {
-    if (onReturnHome) {
-      onReturnHome();
-    } else {
-      router.push("/home");
-    }
+    if (onReturnHome) onReturnHome();
+    else router.push("/home");
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-[2px]">
-      <div className="w-full max-w-[420px] bg-white rounded-[24px] p-6 sm:p-8 flex flex-col items-center text-center gap-6">
-      {/* Medicine bottles & celebration SVG illustration */}
-      <div className="relative size-32 flex items-center justify-center">
-        <svg
-          viewBox="0 0 120 105"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-          className="size-full"
-        >
-          {/* Confetti particles */}
-          <circle cx="61" cy="7" r="2.5" stroke="#FA8059" strokeWidth="1.5" />
-          <circle cx="70" cy="14" r="3" fill="#FFC15D" />
-          <polygon points="45,18 47,21 44,21" fill="#0CCA26" />
-          <polygon points="47,32 49,32 49,34 47,34" fill="#4284EC" />
-          <path d="M72 20C73 19 74 21 75 20" stroke="#58B5FB" strokeWidth="1.5" strokeLinecap="round" />
-          <polygon points="74,31 75,34 77,33 76,30" fill="#E23B06" />
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 p-4 backdrop-blur-[2px]">
+      <div role="dialog" aria-modal="true" aria-labelledby="record-saved-title" className="mx-auto my-6 w-full max-w-[560px] rounded-[24px] bg-white p-5 shadow-2xl sm:my-10 sm:p-8">
+        <div className="flex items-start gap-3">
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#eaf7ed] text-[#287a39]"><CheckCircle2 className="size-6" /></div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-[#287a39]">Step 6 complete</p>
+            <h2 id="record-saved-title" className="mt-1 text-2xl font-semibold text-[#001f3e]">Record saved</h2>
+            <p className="mt-1 text-sm text-[#6e8298]">An ajiye bayanan.</p>
+          </div>
+        </div>
 
-          {/* Bottle 1 */}
-          <g transform="translate(48, 10)">
-            <path
-              d="M12 28L18 24L34 32L28 36L12 28Z"
-              fill="#FFFFFF"
-              stroke="#A1AEBC"
-              strokeWidth="1.5"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M18 24L18 16L30 22L30 30"
-              fill="#FBFBFC"
-              stroke="#A1AEBC"
-              strokeWidth="1.5"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M12 28V62L28 72V36L12 28Z"
-              fill="#FFFFFF"
-              stroke="#A1AEBC"
-              strokeWidth="1.5"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M28 72L44 62V32L28 36V72Z"
-              fill="#F2F3F5"
-              stroke="#A1AEBC"
-              strokeWidth="1.5"
-              strokeLinejoin="round"
-            />
-            {/* Bottle cap */}
-            <path
-              d="M20 14L24 12L30 15L26 17L20 14Z"
-              fill="#FFFFFF"
-              stroke="#A1AEBC"
-              strokeWidth="1.2"
-            />
-            {/* Label detail */}
-            <rect x="16" y="40" width="8" height="12" rx="2" stroke="#4284EC" strokeWidth="1.2" fill="none" />
-            <line x1="18" y1="44" x2="22" y2="44" stroke="#4284EC" strokeWidth="1" />
-            <line x1="18" y1="47" x2="21" y2="47" stroke="#4284EC" strokeWidth="1" />
-          </g>
-
-          {/* Bottle 2 (Tilted) */}
-          <g transform="translate(56, 26)">
-            <path
-              d="M10 24L16 20L32 28L26 32L10 24Z"
-              fill="#FFFFFF"
-              stroke="#A1AEBC"
-              strokeWidth="1.5"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M10 24V56L26 64V32L10 24Z"
-              fill="#FFFFFF"
-              stroke="#A1AEBC"
-              strokeWidth="1.5"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M26 64L40 56V28L26 32V64Z"
-              fill="#E4E8EC"
-              stroke="#A1AEBC"
-              strokeWidth="1.5"
-              strokeLinejoin="round"
-            />
-            {/* Dropper tip */}
-            <path
-              d="M14 18L18 10L24 13L20 21"
-              fill="#FFFFFF"
-              stroke="#A1AEBC"
-              strokeWidth="1.2"
-            />
-          </g>
-        </svg>
-      </div>
-
-      {/* Content */}
-      <div className="flex flex-col gap-2">
-        <h2 className="text-xl sm:text-2xl font-bold text-[#121619]">
-          Encounter completed
-        </h2>
-        <p className="text-sm sm:text-base text-[#6e8298] leading-relaxed max-w-sm">
-          <span className="font-semibold text-[#242b33]">
-            {isAnonymous ? "Anonymous patient's" : `${patientName}’s`}
-          </span>{" "}
-          encounter has been completed. You can track their referral from your
-          notifications.
+        <p className="mt-5 text-sm leading-relaxed text-[#5f7081]">
+          The {isAnonymous ? "anonymous encounter" : `encounter for ${patientName}`} is complete. The recommendation and what happened next are stored together.
         </p>
-      </div>
 
-      {/* Return home button */}
-      <button
-        type="button"
-        onClick={handleReturnHome}
-        className="w-full py-4 rounded-[12px] bg-[#fbfbfc] hover:bg-[#f0f7ff] text-[#0073f3] font-semibold text-base transition-colors cursor-pointer"
-      >
-        Return home
-      </button>
+        <dl className="mt-5 divide-y divide-[#edf0f2] rounded-[18px] border border-[#e4e8ec] px-4 sm:px-5">
+          <div className="grid gap-1 py-4 sm:grid-cols-[140px_1fr] sm:gap-4"><dt className="text-sm text-[#6e8298]">Category</dt><dd className="font-medium text-[#242b33]"><ol className="space-y-1">{categories.map((label, index) => <li key={label}>{categories.length > 1 ? `${index + 1}. ` : ""}{label}</li>)}</ol></dd></div>
+          <div className="grid gap-1 py-4 sm:grid-cols-[140px_1fr] sm:gap-4"><dt className="text-sm text-[#6e8298]">Severity</dt><dd className="font-medium text-[#242b33]">{severityLabel(severity)}</dd></div>
+          <div className="grid gap-1 py-4 sm:grid-cols-[140px_1fr] sm:gap-4"><dt className="text-sm text-[#6e8298]">Recommendation</dt><dd className="font-medium text-[#242b33]">{recommendation || "Routine advice recorded."}</dd></div>
+          <div className="grid gap-1 py-4 sm:grid-cols-[140px_1fr] sm:gap-4"><dt className="text-sm text-[#6e8298]">Outcome</dt><dd className="font-medium text-[#242b33]">{outcomeLabel}</dd></div>
+          {referralDestination && <div className="grid gap-1 py-4 sm:grid-cols-[140px_1fr] sm:gap-4"><dt className="text-sm text-[#6e8298]">Referred to</dt><dd className="flex gap-2 font-medium text-[#242b33]"><MapPin className="mt-0.5 size-4 shrink-0 text-[#0073f3]" />{referralDestination}</dd></div>}
+          {referralReason && <div className="grid gap-1 py-4 sm:grid-cols-[140px_1fr] sm:gap-4"><dt className="text-sm text-[#6e8298]">Reason</dt><dd className="font-medium text-[#242b33]">{referralReason}</dd></div>}
+        </dl>
+
+        <div className="mt-5 flex gap-3 rounded-[16px] bg-[#f2f3f5] p-4 text-sm text-[#596b7c]"><BarChart3 className="mt-0.5 size-5 shrink-0 text-[#356b9e]" /><p><strong className="text-[#354554]">Counted for surveillance.</strong> This visit contributes to the outlet totals, including referrals, refusals and declined recommendations.<span className="mt-1 block text-xs">[Hausa translation pending]</span></p></div>
+
+        <button type="button" onClick={handleReturnHome} className="mt-6 min-h-12 w-full rounded-[12px] bg-[#0073f3] px-5 font-semibold text-white hover:bg-[#0060cb]">Return home</button>
       </div>
     </div>
   );
