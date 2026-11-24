@@ -29,16 +29,18 @@ const baseProps = {
   referralCode: "BK-TRN",
   severity: "urgent" as const,
   conditionCode: "CHOLERA_PATTERN",
+  conditionLabel: "Signs consistent with cholera",
+  guidanceText: "Give ORS now and refer today.",
   onComplete: vi.fn(),
 };
 
 describe("StepReferral", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("renders Step 6a in order without repeating the Step 6 result blocks", () => {
+  it("renders all seven ordered referral elements before outcome capture", () => {
     render(<StepReferral {...baseProps} />);
     const text = document.body.textContent || "";
-    const orderedLabels = ["Step 6a · Referral", "Referral code", "Recommended clinic", "Say to the patient", "Did you refer this patient?"];
+    const orderedLabels = ["Urgent - refer today", "Referral code", "What this looks like", "Before transport - give", "Protect yourself and others", "Recommended clinic", "Say to the patient", "Did you refer this patient?"];
     let previous = -1;
     for (const label of orderedLabels) {
       const position = text.indexOf(label);
@@ -49,8 +51,6 @@ describe("StepReferral", () => {
     expect(screen.getByText("REACH Clinic, Gyadi-gyadi")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Print card/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Send SMS link/i })).toBeInTheDocument();
-    expect(screen.queryByText("What this looks like")).not.toBeInTheDocument();
-    expect(screen.queryByText("Before transport - give")).not.toBeInTheDocument();
   });
 
   it("limits referral destinations to the four approved facilities", () => {
@@ -68,16 +68,16 @@ describe("StepReferral", () => {
     render(<StepReferral {...baseProps} />);
     fireEvent.click(screen.getByRole("button", { name: /Yes, but the patient refused/i }));
     expect(screen.getByText("Referred to")).toBeInTheDocument();
-    expect(screen.getByLabelText(/Reason — optional/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Reason - optional/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Save and finish/i })).toBeEnabled();
   });
 
-  it("shows an optional reason and no destination for No", () => {
+  it("requires a reason and shows no destination for No", () => {
     render(<StepReferral {...baseProps} />);
     fireEvent.click(screen.getByRole("button", { name: /^No/i }));
-    expect(screen.getByLabelText(/Reason — optional/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Reason - required/i)).toBeInTheDocument();
     expect(screen.queryByText("Referred to")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Save and finish/i })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /Save and finish/i })).toBeDisabled();
   });
 
   it("keeps a refused Journey 7 referral active so its code can still be used", async () => {
@@ -95,7 +95,7 @@ describe("StepReferral", () => {
   it("matches Journey 12 by storing the required override without notifying a destination", async () => {
     render(<StepReferral {...baseProps} conditionCode="TB_SCREENING_PATTERN" severity="routine" />);
     fireEvent.click(screen.getByRole("button", { name: /^No/i }));
-    fireEvent.change(screen.getByLabelText(/Reason — optional/i), {
+    fireEvent.change(screen.getByLabelText(/Reason - required/i), {
       target: { value: "Vendor disagreed with the recommendation" },
     });
     fireEvent.click(screen.getByRole("button", { name: /Save and finish/i }));

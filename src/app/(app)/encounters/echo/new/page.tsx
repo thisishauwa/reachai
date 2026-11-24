@@ -35,10 +35,7 @@ import { StepEmergency } from "@/components/echo/step-emergency";
 import { StepComplaintArea } from "@/components/echo/step-complaint-area";
 import { StepComplaintQuestions } from "@/components/echo/step-complaint-questions";
 import { StepTriage } from "@/components/echo/step-triage";
-import {
-  StepReferral,
-  type ReferralOutcome,
-} from "@/components/echo/step-referral";
+import { StepReferral } from "@/components/echo/step-referral";
 import { EncounterCompletedModal } from "@/components/echo/encounter-completed-modal";
 import { useZeroReport } from "@/lib/session/use-zero-report";
 import type {
@@ -52,7 +49,6 @@ import type {
 } from "@/lib/reference/complaint-questions";
 import { complaintAreaForL8Answers } from "@/lib/reference/look-check";
 import { useDestinationFacilities } from "@/lib/queries/referrals";
-import { resultRecommendation } from "@/lib/reference/referral-guidance";
 import {
   documentedDangerSignComplaintArea,
   nextStepAfterComplaint,
@@ -130,9 +126,6 @@ interface EchoEncounterState {
   triageIpcGuidanceEn: string | null;
   referralRequired: boolean;
   referralCode: string | null;
-  referralOutcome: ReferralOutcome | null;
-  referralOutcomeReason: string | null;
-  referralDestinationName: string | null;
 }
 
 const INITIAL_STATE: EchoEncounterState = {
@@ -170,9 +163,6 @@ const INITIAL_STATE: EchoEncounterState = {
   triageIpcGuidanceEn: null,
   referralRequired: false,
   referralCode: null,
-  referralOutcome: null,
-  referralOutcomeReason: null,
-  referralDestinationName: null,
 };
 
 export default function NewEchoEncounterPage() {
@@ -826,17 +816,14 @@ export default function NewEchoEncounterPage() {
           referralCode={state.referralCode ?? generateReferralCode(activeFacility.facilityCode)}
           severity={state.triageSeverity ?? "urgent"}
           conditionCode={state.triageConditionCode ?? "UNCLASSIFIED"}
+          conditionLabel={state.triageConditionLabel ?? "Signs that need a clinic check"}
+          guidanceText={state.triageGuidanceEn ?? "The recorded signs need a clinic assessment."}
+          ipcGuidance={state.triageIpcGuidanceEn}
           caregiverReported={state.caregiverReported}
           requiresMaternityCapability={state.answers.PREGNANCY_STATUS === "pregnant"}
-          onComplete={(completion) => {
+          onComplete={() => {
             void completeEncounter(state.encounterId!);
-            setState((s) => ({
-              ...s,
-              referralOutcome: completion.outcome,
-              referralOutcomeReason: completion.reason,
-              referralDestinationName: completion.destinationName,
-              step: "complete",
-            }));
+            setState((s) => ({ ...s, step: "complete" }));
           }}
         />
       )}
@@ -850,16 +837,6 @@ export default function NewEchoEncounterPage() {
               : "Anonymous patient"
           }
           isAnonymous={state.privacyMode === "anonymous"}
-          category={state.triageConditionLabel}
-          severity={state.triageSeverity}
-          recommendation={resultRecommendation(
-            state.triageConditionCode ?? "UNCLASSIFIED",
-            state.triageSeverity ?? "routine",
-            state.referralRequired,
-          )}
-          referralOutcome={state.referralRequired ? state.referralOutcome : "not_required"}
-          referralReason={state.referralOutcomeReason}
-          referralDestination={state.referralDestinationName}
           onReturnHome={() => {
             toast.success("Encounter completed");
             router.push("/home");

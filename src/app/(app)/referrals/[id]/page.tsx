@@ -34,7 +34,6 @@ export default function ReferralDetailPage() {
   const transition = useTransitionReferral();
   const [confirmation, setConfirmation] = useState<string>("");
   const [clinicalNote, setClinicalNote] = useState("");
-  const [resultSaved, setResultSaved] = useState(false);
 
   const encounter = referral?.encounters;
   const triage = encounter?.triage_outcomes?.[0];
@@ -46,16 +45,13 @@ export default function ReferralDetailPage() {
 
   if (isLoading || !referral) return <div className="p-6 space-y-4"><Skeleton className="h-12 w-48 rounded-full" /><Skeleton className="h-44 w-full rounded-[24px]" /><Skeleton className="h-80 w-full rounded-[24px]" /></div>;
 
-  const saveClinicalResult = async (sendBackToOutlet: boolean) => {
+  const saveClinicalResult = async () => {
     if (!confirmation) { toast.error("Choose a diagnosis confirmation before saving"); return; }
     if (!isDestination) { toast.error("Only the receiving clinic can close this referral"); return; }
     try {
-      if (!resultSaved && referral.status !== "closed") {
-        if (referral.status === "created") await transition.mutateAsync({ referralId: referral.id, toStatus: "arrived" });
-        await transition.mutateAsync({ referralId: referral.id, toStatus: "closed", reason: `${confirmation}${clinicalNote.trim() ? `: ${clinicalNote.trim()}` : ""}` });
-        setResultSaved(true);
-      }
-      toast.success(sendBackToOutlet ? "Clinical result sent back to the outlet" : "Clinical result saved to the backend");
+      if (referral.status === "created") await transition.mutateAsync({ referralId: referral.id, toStatus: "arrived" });
+      await transition.mutateAsync({ referralId: referral.id, toStatus: "closed", reason: `${confirmation}${clinicalNote.trim() ? `: ${clinicalNote.trim()}` : ""}` });
+      toast.success("Clinical result sent to DHIS2 and back to the outlet");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save the clinical result");
     }
@@ -86,7 +82,7 @@ export default function ReferralDetailPage() {
 
       <section className="rounded-[22px] border border-[#e4e8ec] bg-white p-5 sm:p-7"><p className="text-xs font-semibold uppercase tracking-wider text-[#6e8298]">Confirm the diagnosis</p><div className="grid sm:grid-cols-2 gap-2 mt-4">{CONFIRMATIONS.map((item) => <button key={item} type="button" aria-pressed={confirmation === item} onClick={() => setConfirmation(item)} className={cn("min-h-12 rounded-[12px] border px-4 py-3 text-left flex items-center justify-between gap-3", confirmation === item ? "border-[#0073f3] bg-[#f0f7ff] text-[#0051a8] ring-1 ring-[#0073f3]" : "border-[#d8e0e7]")}><span className="font-medium">{item}</span>{confirmation === item && <Check className="size-5" />}</button>)}</div><textarea value={clinicalNote} onChange={(event) => setClinicalNote(event.target.value)} rows={3} placeholder="Optional clinical note" className="mt-4 w-full rounded-[12px] border border-[#d8e0e7] px-4 py-3 outline-none focus:border-[#0073f3]" /></section>
 
-      <div className="grid sm:grid-cols-2 gap-3"><button type="button" disabled={!confirmation || transition.isPending || !isDestination} onClick={() => void saveClinicalResult(false)} className="min-h-12 rounded-[12px] bg-[#0073f3] px-5 text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2"><Send className="size-4" />Save and send to backend</button><button type="button" disabled={!confirmation || transition.isPending || !isDestination} onClick={() => void saveClinicalResult(true)} className="min-h-12 rounded-[12px] border border-[#0073f3] bg-white px-5 text-[#0073f3] font-medium disabled:opacity-50">Send result back to outlet</button></div>
+      <div className="grid sm:grid-cols-2 gap-3"><button type="button" disabled={!confirmation || transition.isPending || !isDestination} onClick={() => void saveClinicalResult()} className="min-h-12 rounded-[12px] bg-[#0073f3] px-5 text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2"><Send className="size-4" />Save and send to DHIS2</button><button type="button" disabled={!confirmation || transition.isPending || !isDestination} onClick={() => void saveClinicalResult()} className="min-h-12 rounded-[12px] border border-[#0073f3] bg-white px-5 text-[#0073f3] font-medium disabled:opacity-50">Send result back to outlet</button></div>
     </div>
   );
 }
