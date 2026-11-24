@@ -91,7 +91,7 @@ export function ReferralGeneratedSheet({
           <div className="flex items-center gap-2">
             <div className="size-2 rounded-full bg-[#09951c]" />
             <span className="text-xs font-semibold uppercase tracking-wider text-[#6e8298]">
-              Created
+              Issue date
             </span>
           </div>
           <span className="text-sm text-[#6e8298]">{formattedDate}</span>

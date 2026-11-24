@@ -3,7 +3,12 @@
 import { ArrowRight, CheckCircle2, ShieldAlert, Stethoscope } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { TriageSeverity } from "@/lib/supabase/database.types";
-import { careGuidanceFor, ROUTINE_RETURN_SIGNS } from "@/lib/reference/referral-guidance";
+import {
+  careGuidanceFor,
+  protectHeadingFor,
+  resultCategoryLabels,
+  ROUTINE_RETURN_SIGNS,
+} from "@/lib/reference/referral-guidance";
 
 interface TriageBottomSheetProps {
   severity: TriageSeverity;
@@ -22,7 +27,8 @@ export function TriageBottomSheet({ severity, conditionCode = "UNCLASSIFIED", co
   const isUrgent = severity === "urgent";
   const guidance = careGuidanceFor(conditionCode, severity);
   const hasMatch = conditionLabel && conditionLabel !== "Clinical Assessment" && conditionLabel !== "No specific category identified";
-  const displayCategory = hasMatch ? conditionLabel : "Signs that need a clinic check";
+  const categoryLabels = resultCategoryLabels(hasMatch ? conditionLabel : "No specific category identified");
+  const protectHeading = protectHeadingFor(conditionCode);
 
   if (!referralRequired) {
     return (
@@ -33,9 +39,10 @@ export function TriageBottomSheet({ severity, conditionCode = "UNCLASSIFIED", co
           <p className="text-sm text-[#41694a] mt-2">No danger signs and no priority disease pattern matched.</p>
         </div>
         <section className="rounded-[18px] border border-[#e4e8ec] p-5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-[#6e8298]">What was recorded</p>
-          <h3 className="text-lg font-semibold text-[#242b33] mt-2">{conditionLabel || "Routine illness"}</h3>
-          <p className="text-sm text-[#5f7081] mt-2 leading-relaxed">{guidanceText}</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#6e8298]">Signs consistent with</p>
+          <h3 className="text-lg font-semibold text-[#242b33] mt-2">{categoryLabels[0]}</h3>
+          <p className="mt-3 rounded-[12px] border border-[#e4e8ec] bg-[#f7f8f9] px-4 py-3 text-sm text-[#596b7c]"><strong>This is not a diagnosis.</strong> A qualified health worker must confirm it.<span className="block text-xs mt-1">Wannan ba ganewar asali ba ne. Ma&apos;aikacin lafiya ne zai tabbatar.</span></p>
+          <p className="text-sm text-[#5f7081] mt-3 leading-relaxed">{guidanceText}</p>
         </section>
         <section className="rounded-[18px] border border-[#d9e8f7] bg-[#f6faff] p-5">
           <p className="text-xs font-semibold uppercase tracking-wider text-[#356b9e]">You may give</p>
@@ -58,14 +65,14 @@ export function TriageBottomSheet({ severity, conditionCode = "UNCLASSIFIED", co
 
   return (
     <div className="w-full rounded-[24px] bg-white p-5 pb-28 sm:p-8 sm:pb-28 flex flex-col gap-6">
-      <div className={cn("rounded-[18px] border p-5", isEmergency ? "border-[#f2c8bd] bg-[#fff5f2]" : isUrgent ? "border-[#f0d7b1] bg-[#fffaf1]" : "border-[#d9e8f7] bg-[#f6faff]") }>
+      <div className={cn("rounded-[18px] border p-5", isEmergency ? "border-[#f2c8bd] bg-[#fff5f2]" : isUrgent ? "border-[#d8cef1] bg-[#f7f4ff]" : "border-[#cce8d2] bg-[#eef8f0]") }>
         <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider opacity-70">Step 6 of 6 - Result</p><h2 className="text-xl sm:text-2xl font-semibold mt-1">{guidance.severityLabel}</h2><p className="text-sm mt-2 opacity-80">{guidance.severityReason}</p></div>{onClose && <button type="button" onClick={onClose} aria-label="Close" className="size-8 rounded-full hover:bg-black/5">×</button>}</div>
       </div>
       <section className="rounded-[18px] border border-[#e4e8ec] p-5">
-        <div className="flex items-center gap-2"><Stethoscope className="size-4 text-[#5f7081]" /><p className="text-xs font-semibold uppercase tracking-wider text-[#6e8298]">What this looks like</p></div>
-        <h3 className="text-lg sm:text-xl font-semibold text-[#242b33] mt-3">{displayCategory}</h3>
-        <p className="text-sm text-[#5f7081] mt-2">{guidanceText}</p>
-        <div className="mt-4 rounded-[12px] bg-[#fff8f6] border border-[#ffd5c8] px-4 py-3 flex gap-2"><ShieldAlert className="size-4 text-[#d4583b] shrink-0 mt-0.5" /><p className="text-sm text-[#a03823]"><strong>This is not a diagnosis.</strong> A qualified health worker must confirm it.<span className="block text-xs mt-1">Wannan ba ganewar asali ba ne. Ma&apos;aikacin lafiya ne zai tabbatar.</span></p></div>
+        <div className="flex items-center gap-2"><Stethoscope className="size-4 text-[#5f7081]" /><p className="text-xs font-semibold uppercase tracking-wider text-[#6e8298]">Signs consistent with</p></div>
+        <ol className="mt-3 space-y-2">{categoryLabels.map((label, index) => <li key={label} className="flex items-start gap-3">{categoryLabels.length > 1 && <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#eef5fc] text-xs font-bold text-[#356b9e]">{index + 1}</span>}<span className="text-lg sm:text-xl font-semibold text-[#242b33]">{label}</span></li>)}</ol>
+        <div className="mt-3 rounded-[12px] bg-[#fff8f6] border border-[#ffd5c8] px-4 py-3 flex gap-2"><ShieldAlert className="size-4 text-[#d4583b] shrink-0 mt-0.5" /><p className="text-sm text-[#a03823]"><strong>This is not a diagnosis.</strong> A qualified health worker must confirm it.<span className="block text-xs mt-1">Wannan ba ganewar asali ba ne. Ma&apos;aikacin lafiya ne zai tabbatar.</span></p></div>
+        <p className="text-sm text-[#5f7081] mt-3">{guidanceText}</p>
       </section>
       <section className="rounded-[18px] border border-[#d9e8f7] bg-[#f6faff] p-5">
         <p className="text-xs font-semibold uppercase tracking-wider text-[#356b9e]">Do now</p>
@@ -75,7 +82,7 @@ export function TriageBottomSheet({ severity, conditionCode = "UNCLASSIFIED", co
         </div>
       </section>
       <section className="rounded-[18px] border border-[#ead8b9] bg-[#fffbf3] p-5">
-        <p className="text-xs font-semibold uppercase tracking-wider text-[#8a5b00]">Protect yourself and others</p>
+        <p className="text-xs font-semibold uppercase tracking-wider text-[#8a5b00]">{protectHeading}</p>
         <ul className="mt-3 space-y-2 text-sm text-[#694e1d]">{(ipcGuidance ? [ipcGuidance] : guidance.ipc).map((item) => <li key={item} className="flex gap-2"><ShieldAlert className="size-4 mt-0.5 shrink-0" /><span>{item}</span></li>)}</ul>
         {guidance.surveillanceNotice && <p className="mt-3 rounded-[10px] bg-[#fff1ed] px-3 py-2 text-sm font-semibold text-[#a03823]">{guidance.surveillanceNotice}</p>}
       </section>

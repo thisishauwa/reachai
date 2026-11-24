@@ -39,7 +39,28 @@ describe("TriageBottomSheet", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /Save and finish/i }));
+    expect(screen.getByText(/This is not a diagnosis/i)).toBeInTheDocument();
     expect(onCompleteRoutine).toHaveBeenCalledTimes(1);
     expect(onConfirmReferral).not.toHaveBeenCalled();
+  });
+
+  it("shows two fired categories separately in ranked order", () => {
+    render(
+      <TriageBottomSheet
+        severity="urgent"
+        conditionCode="CHOLERA_PATTERN+TYPHOID_PATTERN"
+        conditionLabel="Signs consistent with cholera; also Signs consistent with typhoid"
+        guidanceText="Refer today."
+        referralRequired
+        onConfirmReferral={vi.fn()}
+      />,
+    );
+
+    const categoryList = screen.getByText("cholera").closest("ol");
+    expect(categoryList).not.toBeNull();
+    const categories = categoryList ? Array.from(categoryList.querySelectorAll("li")) : [];
+    expect(categories).toHaveLength(2);
+    expect(categories[0]).toHaveTextContent("cholera");
+    expect(categories[1]).toHaveTextContent("typhoid");
   });
 });
